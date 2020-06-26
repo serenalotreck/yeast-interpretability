@@ -4,14 +4,9 @@ instances from a RF model.
 
 Author: Serena G. Lotreck
 """
-## STEPS:
-# define what a "mispredicted" instance will be
-# get predictions and labels for each instance
-# separate correctly and incorrectly
-
 def calculate_error(predicted,true):
     """
-    Calculate the percent error of predictions.
+    Calculate the percent error of predictions. Helper for separate().
 
     Parameters:
         predicted, float: predicted Y value by model
@@ -25,6 +20,7 @@ def calculate_error(predicted,true):
 def define_category(error):
     """
     Use 5% error to categorize prediction as correct or mispredicted.
+    Helper for separate().
 
     Parameters:
         error, float: the percent error
@@ -40,6 +36,7 @@ def define_category(error):
 def get_predictions(scores):
     """
     Get predictions and ground truth for each instance.
+    Helper for separate().
 
     Parameters:
         scores, df: the scores output from the ML pipeline.
@@ -52,7 +49,7 @@ def get_predictions(scores):
     # rename rep_1 to Y_pred
     preds = preds.rename(columns={'rep_1':'Y_pred'})
 
-    return preds 
+    return preds
 
 def separate(scores):
     """
