@@ -169,18 +169,18 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
     print('\n\n==> Separating instances into bins based on label <==')
     interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
     label_bin_df = get_bins(interp_df,'Y')
-    print(f'\nSnapshot of dataframe with label bin column added: {label_bin_df.head()}')
+    print(f'\nSnapshot of dataframe with label bin column added:\n {label_bin_df.head()}')
 
     # get error for all instances
     print('\n\n==> Calculating error for all instances <==')
     label_bin_df['percent_error'] = label_bin_df.apply(lambda x: mp.calculate_error(x.prediction,
                                 x.Y), axis=1)
-    print(f'\nSnapshot of dataframe with error column added: {label_bin_df.head()}')
+    print(f'\nSnapshot of dataframe with error column added:\n {label_bin_df.head()}')
 
     # Split each label bin into error bins
     print('\n\n==> Separating instances into bins by error <==')
     label_bin_df = get_bins(label_bin_df,'percent_error')
-    print(f'\nSnapshot of dataframe with error bin column added: {label_bin_df.head()}')
+    print(f'\nSnapshot of dataframe with error bin column added:\n {label_bin_df.head()}')
 
     # Make swarmplots
     # print('\n\n==> Making swarmplots <==')
