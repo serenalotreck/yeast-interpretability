@@ -31,19 +31,7 @@ def swarmplot_with_cbar(cmap, cbar_label, ax, *args, **kwargs):
     Adapted from
     http://savvastjortjoglou.com/intrepretable-machine-learning-nfl-combine
     """
-    ax = sns.swarmplot(*args, **kwargs)
-
-    ax.legend().remove() # remove the legend, because we want to set a colorbar instead
-    plt.xticks(rotation=45)
-
-    ## create colorbar ##
-    divider = make_axes_locatable(ax)
-    ax_cb = divider.new_horizontal(size="3%", pad=0.05)
-    fig.add_axes(ax_cb)
-    cb = ColorbarBase(ax_cb, cmap=cmap, orientation='vertical')
-    cb.set_label(cbar_label, labelpad=10)
-
-    return fig
+    pass
 
 
 def make_bin_plot(i, label_bin_dict, label_bin, features_scaled,
@@ -58,57 +46,6 @@ def make_bin_plot(i, label_bin_dict, label_bin, features_scaled,
         features_scaled, df: scaled feature values
         interp_df, df: interp_file df
     """
-    # Sort keys
-    sorted_keys = sorted(label_bin_dict.keys())
-
-    # Make figure
-    #fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(3,2)
-
-    # Define colorbar preferences
-    cmap = plt.get_cmap('viridis')
-    cbar_label = 'Feature Value Percentile'
-
-    # Make the plot
-    #ax_list = [ax1, ax2, ax3, ax4, ax5, ax6]
-    for key in sorted_keys:
-        # Get data for this bin
-        bin_data = interp_df[interp_df.index.isin(label_bin_dict[key])]
-        bin_feature_vals = features_scaled[features_scaled.index.isin(label_bin_dict[key])]
-
-        bin_data_melted = pd.melt(bin_data, id_vars=['Y'], value_vars=bin_data.columns.values.tolist()[1:])
-        print(f'Bin data melted: {bin_data_melted.head()}')
-        # Make plot
-        # ax = swarmplot_with_cbar(cmap, cbar_label, ax, x='feature',
-        #  y='contribution', hue='scaled_feat_vals', palette='viridis',
-        #   order=features, data=)
-
-
-    # Make subplots
-    # axes_counter = [0,0]
-    # for bin in sorted_keys:
-    #     # Get data for this bin
-    #     bin_data = interp_df[interp_df.index.isin(label_bin_dict[bin])]
-    #     bin_feature_vals = features_scaled[features_scaled.index.isin(label_bin_dict[bin])]
-    #
-    #     # Plot
-    #     axs[axes_counter[0], axes_counter[1]].swarmplot_with_cbar(cmap, cbar_label,  x='feature', y='contribution',
-    #                 hue='scaled_feat_vals', palette='viridis', order=features,
-    #                 data=test_expl_df.loc[test_expl_df.feature!='']);
-    #     axs[axes_counter[0], axes_counter[1]].set_title(bin)
-    #
-    #     # Update the axes counter
-    #     if i % 2 != 0:
-    #         axes_counter[0] += 1
-    #
-    #     axes_counter[1] = (i+1) % 2
-
-    # Hide x labels and tick labels for top plots and y ticks for right plots.
-    # for ax in axs.flat:
-    #     ax.label_outer()
-    #
-    # plt.tight_layout()
-    #
-    # plt.savefig(label_bin+'.png')
 
 
 
@@ -132,6 +69,9 @@ def make_swarmplots(interp_df, label_error_bin_indices, gini, out_loc, feature_v
     vals_scaled = min_max_scaler.fit_transform(vals)
     features_scaled = pd.DataFrame(vals_scaled, columns=cols)
     print(features_scaled.head())
+
+    # Add bin ID's as columns on interp_df
+
 
     # Make plots
     for i, label_bin in enumerate(label_error_bin_indices):
@@ -174,17 +114,19 @@ def get_bins(interp_df, value_name):
     bin_list = [bin0, bin1, bin2, bin3, bin4, bin5]
 
     # Get indices for each bin
-    bin_idx = {}
+    bin_col_dfs = []
     for i, bin in enumerate(bin_list):
-        idx_df = interp_df[(bin[0] < interp_df[value_name]) &
-                            (interp_df[value_name] < bin[1])]
-        idx_list = idx_df.index.tolist()
-        bin_idx[f'{value_name}_bin{i}'] = idx_list
+        bin_col_df = interp_df[(bin[0] < interp_df[value_name]) &
+                            (interp_df[value_name] < bin[1])].copy()
+        bin_col_df[f'{value_name}_bin_ID'] = f'{value_name}_bin{i}'
+        bin_col_dfs.append(bin_col_df)
 
-    return bin_idx
+    interp_df_binned = pd.concat(bin_col_dfs)
+
+    return interp_df_binned
 
 
-def get_top_ten(imp_file, sep):
+def get_top_ten(imp_file, sep_imp):
     """
     Gets the top ten most important features form the gini importance scores file.
 
@@ -194,7 +136,7 @@ def get_top_ten(imp_file, sep):
 
     returns: list of the names of the top ten globally important features
     """
-    imp = pd.read_csv(imp_file, sep=sep)
+    imp = pd.read_csv(imp_file, sep=sep_imp, engine='python')
 
     if len(imp.mean_imp) > 10:
         top_ten = imp.index.tolist()[:10]
@@ -225,32 +167,27 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
 
     # Get distribution of the label and put in bins
     print('\n\n==> Separating instances into bins based on label <==')
-    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp)
-    print(interp_df.head())
-    label_bin_indices = get_bins(interp_df,'Y')
-    print(f'\nBin names are {list(label_bin_indices.keys())}')
+    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
+    label_bin_df = get_bins(interp_df,'Y')
+    print(f'\nSnapshot of dataframe with label bin column added: {label_bin_df.head()}')
 
     # get error for all instances
     print('\n\n==> Calculating error for all instances <==')
-    interp_df['percent_error'] = interp_df.apply(lambda x: mp.calculate_error(x.prediction,
+    label_bin_df['percent_error'] = label_bin_df.apply(lambda x: mp.calculate_error(x.prediction,
                                 x.Y), axis=1)
-    print(f'\nSnapshot of dataframe with error column added: {interp_df.head()}')
+    print(f'\nSnapshot of dataframe with error column added: {label_bin_df.head()}')
 
     # Split each label bin into error bins
     print('\n\n==> Separating instances into bins by error <==')
-    label_error_bin_indices = {}
-    for key in label_bin_indices:
-        label_bin_df = interp_df[interp_df.index.isin(label_bin_indices[key])]
-        error_bin_indices = get_bins(label_bin_df, 'percent_error')
-        label_error_bin_indices[key] = error_bin_indices
-    print(f'\nError bin names are {list(label_error_bin_indices[list(label_bin_indices.keys())[0]].keys())}')
+    label_bin_df = get_bins(label_bin_df,'percent_error')
+    print(f'\nSnapshot of dataframe with error bin column added: {label_bin_df.head()}')
 
     # Make swarmplots
-    print('\n\n==> Making swarmplots <==')
-    feature_values = pd.read_csv(feature_table, sep=sep_feat)
-    print(feature_values.head())
-    make_swarmplots(interp_df, label_error_bin_indices, gini, out_loc,
-                    feature_values)
+    # print('\n\n==> Making swarmplots <==')
+    # feature_values = pd.read_csv(feature_table, sep=sep_feat, engine='python')
+    # print(feature_values.head())
+    # make_swarmplots(interp_df, label_error_bin_indices, gini, out_loc,
+    #                 feature_values)
     print('\nSwarmplots finished!')
 
 
