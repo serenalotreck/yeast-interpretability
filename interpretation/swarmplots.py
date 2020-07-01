@@ -18,6 +18,7 @@ import argparse
 
 import mispredictions as mp
 import pandas as pd
+import numpy as np
 from sklearn import preprocessing
 
 import matplotlib.pyplot as plt
@@ -34,49 +35,104 @@ def swarmplot_with_cbar(cmap, cbar_label, ax, *args, **kwargs):
     pass
 
 
-def make_bin_plot(i, label_bin_dict, label_bin, features_scaled,
-                interp_df):
+def make_tidy_data(bin_df, features_scaled, y_name):
+    """
+    Reshapes and combines bin_df and features_scaled to be compatible with catplot.
+
+    parameters:
+        bin_df, pandas df: a subset by label ID of interp_df with bin ID's
+        features_scaled, pandas df: scaled feature values
+        y_name, str: Name of label column in feature_table
+
+    returns:
+    """
+    # Get a list of the error bin of all instances
+    error_bin_IDs = bin_df.percent_error_bin_ID.copy()
+    error_bin_list = error_bin_IDs.unique()
+    print(f'error_bin_IDs = {error_bin_IDs}')
+
+    # Drop columns so that bin_df and features_scaled have same col names
+    bin_df = bin_df.drop(columns=['Y_bin_ID', 'percent_error',
+                                'percent_error_bin_ID', 'Y', 'bias', 'prediction'])
+    features_scaled = features_scaled.drop(columns=[y_name])
+    print('\nAfter dropping, number of columns in bin_df and features_scaled are '
+    f'{len(bin_df.columns.values.tolist())} and {len(features_scaled.columns.values.tolist())}')
+
+    # Stack bin_df
+    bin_df_stacked = pd.DataFrame(bin_df.stack(), columns=['contrib'])
+    bin_df_stacked = bin_df_stacked.rename_axis(('ID', 'feature'))
+    bin_df_stacked = bin_df_stacked.reset_index(level='feature')
+    # Add column for error_bin_ID
+    bin_df_stacked['error_bin_ID'] = np.nan
+    for id in error_bin_list:
+        indices = error_bin_IDs.index[error_bin_IDs == id].tolist()
+        bin_df_stacked.loc[indices,'error_bin_ID'] = id
+    # Make into a multiindex with numerical inner index
+    bin_df_stacked = bin_df_stacked.reset_index()
+    bin_df_stacked['sub_idx'] = bin_df_stacked.groupby('ID').cumcount()
+    bin_df_stacked = bin_df_stacked.set_index(['ID', 'sub_idx'])
+    print(f'\n\nStacked contribution dataframe for this bin:\n{bin_df_stacked}')
+
+    # Stack features_scaled
+    features_scaled_stacked = pd.DataFrame(features_scaled.stack(), columns=['value'])
+    features_scaled_stacked = features_scaled_stacked.rename_axis(('ID',
+                                                                'feature'))
+    features_scaled_stacked = features_scaled_stacked.reset_index(level='feature')
+    # Make into a multiindex
+    features_scaled_stacked = features_scaled_stacked.reset_index()
+    features_scaled_stacked['sub_idx'] = features_scaled_stacked.groupby('ID').cumcount()
+    features_scaled_stacked = features_scaled_stacked.set_index(['ID', 'sub_idx'])
+    print(f'\n\nStacked feature value dataframe for this bin:\n{features_scaled_stacked}')
+
+    # Combine over the feature column and outer index
+    plot_df = bin_df_stacked.merge(features_scaled_stacked, left_index=True, right_on=['ID', 'sub_idx'])
+    ## TODO: test that feature names always line up!!!!!!!
+    plot_df = plot_df.drop(columns=['feature_y'])
+    plot_df = plot_df.rename({'feature_x':'feature'})
+    print(f'\n\nSnapshot of dataframe used for plotting:\n{plot_df}')
+
+
+def make_bin_plot(bin_df, features_scaled, y_name):
     """
     Makes one figure with error bin # of subplots.
 
     parameters:
-        i, int: number of the label bin of this figure
-        label_bin_dict, dict: error bins indices for this label
-        label_bin, str: ID of the bin being plotted
-        features_scaled, df: scaled feature values
-        interp_df, df: interp_file df
+        bin_df, pandas df: a subset by label ID of interp_df with bin ID's
+        features_scaled, pandas df: scaled feature values
+        y_name, str: Name of label column in feature_table
     """
+    # Get bin ID to use as plot title
+    bin_ID = bin_df.Y_bin_ID.unique()
+    print(f'\n\nPlot being made for bin {bin_ID}')
+
+    # Reshape the data
+    plot_df = make_tidy_data(bin_df, features_scaled, y_name)
 
 
 
-def make_swarmplots(interp_df, label_error_bin_indices, gini, out_loc, feature_values):
+def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_name):
     """
     Makes six matplotlib figures, each with 6 subfigures. Each figure corresponds
     to one label bin, and each subplot is for an error bin within that label bin.
 
     parameters:
         interp_df, pandas df: full dataframe from interp_file
-        label_error_bin_indices, dict of dict: indices for all bins
+        label_bin_df, pandas df: interp_df with columns for bin IDs
         gini, list: ten features to include on swarmplots
         out_loc, str: path to save figures
-        feature_values, padnas df: feature table
+        feature_values, pandas df: feature table
+        y_name, str: Name of label column in feature_table
     """
     # Normalize the feature values between 0 and 1
-    vals = feature_values.values # returns a numpy array
-    cols = feature_values.columns
-
-    min_max_scaler = preprocessing.MinMaxScaler()
-    vals_scaled = min_max_scaler.fit_transform(vals)
-    features_scaled = pd.DataFrame(vals_scaled, columns=cols)
-    print(features_scaled.head())
-
-    # Add bin ID's as columns on interp_df
-
+    features_scaled = feature_values.apply(lambda x: x/x.max())
 
     # Make plots
-    for i, label_bin in enumerate(label_error_bin_indices):
-        make_bin_plot(i, label_error_bin_indices[label_bin], label_bin, features_scaled,
-                        interp_df)
+    bins = label_bin_df.Y_bin_ID.unique()
+    for i, bin in enumerate(bins):
+        bin_df = label_bin_df[label_bin_df['Y_bin_ID'] == bin].copy()
+        bin_df_idx = bin_df.index.values.tolist()
+        print(f'The max index value in this label bin is {max(bin_df_idx)}')
+        make_bin_plot(bin_df, features_scaled, y_name)
 
 def get_bins(interp_df, value_name):
     """
@@ -91,7 +147,7 @@ def get_bins(interp_df, value_name):
         interp_df, pandas df: dataframe of interp_file or a subset of
         value_name, str: name of the column to use
 
-    returns: a dict where keys are bin ID's and values are list of indices in bin
+    returns: interp_df with a column for the bin ID of each instance
     """
     # Get label column
     values = interp_df[value_name]
@@ -113,7 +169,7 @@ def get_bins(interp_df, value_name):
     bin5 = (mean+2*SD, max)
     bin_list = [bin0, bin1, bin2, bin3, bin4, bin5]
 
-    # Get indices for each bin
+    # Get bin ID for each instance
     bin_col_dfs = []
     for i, bin in enumerate(bin_list):
         bin_col_df = interp_df[(bin[0] < interp_df[value_name]) &
@@ -147,7 +203,7 @@ def get_top_ten(imp_file, sep_imp):
 
 
 def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
-        out_loc):
+        y_name, out_loc):
     """
     Generates swarmplots.
 
@@ -158,6 +214,7 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
         imp_file, str: path to the file containing gini importances from the
             ML pipeline
         sep, str: delimiter for the above files
+        y_name, str: Name of label column in feature_table
         out_loc, str: path to save plots
     """
     # Get the ten features to use in plots
@@ -169,25 +226,24 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
     print('\n\n==> Separating instances into bins based on label <==')
     interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
     label_bin_df = get_bins(interp_df,'Y')
-    print(f'\nSnapshot of dataframe with label bin column added:\n {label_bin_df.head()}')
+    print(f'\nSnapshot of dataframe with label bin column added:\n\n {label_bin_df.head()}')
 
     # get error for all instances
     print('\n\n==> Calculating error for all instances <==')
     label_bin_df['percent_error'] = label_bin_df.apply(lambda x: mp.calculate_error(x.prediction,
                                 x.Y), axis=1)
-    print(f'\nSnapshot of dataframe with error column added:\n {label_bin_df.head()}')
+    print(f'\nSnapshot of dataframe with error column added:\n\n {label_bin_df.head()}')
 
     # Split each label bin into error bins
     print('\n\n==> Separating instances into bins by error <==')
     label_bin_df = get_bins(label_bin_df,'percent_error')
-    print(f'\nSnapshot of dataframe with error bin column added:\n {label_bin_df.head()}')
+    print(f'\nSnapshot of dataframe with error bin column added:\n\n {label_bin_df.head()}')
 
     # Make swarmplots
-    # print('\n\n==> Making swarmplots <==')
-    # feature_values = pd.read_csv(feature_table, sep=sep_feat, engine='python')
-    # print(feature_values.head())
-    # make_swarmplots(interp_df, label_error_bin_indices, gini, out_loc,
-    #                 feature_values)
+    print('\n\n==> Making swarmplots <==')
+    feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
+    make_swarmplots(interp_df, label_bin_df, gini, out_loc,
+                   feature_values, y_name)
     print('\nSwarmplots finished!')
 
 
@@ -206,10 +262,12 @@ if __name__ == "__main__":
     default=',')
     parser.add_argument('-sep_imp', type=str, help='delimiter in imp file',
     default=',')
+    parser.add_argument('-y_name', type=str, help='Name of label column in '
+    'feature_table', default='Y')
     parser.add_argument('-out_loc', type=str, help='path to save the plots',
     default='')
 
     args = parser.parse_args()
 
     main(args.interp_file, args.feature_table, args.imp_file, args.sep_interp,
-    args.sep_feat, args.sep_imp, args.out_loc)
+    args.sep_feat, args.sep_imp, args.y_name, args.out_loc)
