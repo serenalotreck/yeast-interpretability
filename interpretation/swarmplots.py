@@ -91,6 +91,8 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     plot_df = plot_df.rename({'feature_x':'feature'})
     print(f'\n\nSnapshot of dataframe used for plotting:\n{plot_df}')
 
+    return plot_df
+
 
 def make_bin_plot(bin_df, features_scaled, y_name):
     """
@@ -160,7 +162,7 @@ def get_bins(interp_df, value_name):
     min = values.min()
     max = values.max()
 
-    # Get bin bounds ##TODO see if there's a better way to do this
+    # Get bin bounds
     bin0 = (min, mean-2*SD)
     bin1 = (mean-2*SD, mean-SD)
     bin2 = (mean-SD, mean)
@@ -182,27 +184,37 @@ def get_bins(interp_df, value_name):
     return interp_df_binned
 
 
-def get_top_ten(imp_file, sep_imp):
+def get_top_ten(imp_file):
     """
     Gets the top ten most important features form the gini importance scores file.
 
     parameters:
         imp_file, str: path to the gini importance
-        sep, str: delimiter for imp_file file
+        interp_file, str: path to the file containing treeinterpreter output
+            from the ML pipeline
+        feature_table, str: path to the file containing the feature table
 
-    returns: list of the names of the top ten globally important features
+    returns:
+        top_ten: list of top ten globally important features
+        interp_df, pandas df: interpretation dataframe with only top ten features
+        feature_values, pandas df: feature matrix with only top ten features
     """
-    imp = pd.read_csv(imp_file, sep=sep_imp, engine='python')
+    imp = pd.read_csv(imp_file, sep='\t', engine='python')
+    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
+    feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
 
     if len(imp.mean_imp) > 10:
         top_ten = imp.index.tolist()[:10]
+        others = imp.index.tolist()[10:]
+        interp_df = interp_df.drop(columns=others)
+        feature_values = feature_values.drop(columns=others)
     else:
         top_ten = imp.index.tolist()
 
-    return top_ten
+    return top_ten, interp_df, feature_values
 
 
-def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
+def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
         y_name, out_loc):
     """
     Generates swarmplots.
@@ -213,18 +225,17 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
         feature_table, str: path to the file containing the feature table
         imp_file, str: path to the file containing gini importances from the
             ML pipeline
-        sep, str: delimiter for the above files
+    ### FIX    sep, str: delimiter for the above files
         y_name, str: Name of label column in feature_table
         out_loc, str: path to save plots
     """
     # Get the ten features to use in plots
     print('==> Getting top ten most important features <==')
-    gini = get_top_ten(imp_file, sep_imp)
+    gini, interp_df, feature_values = get_top_ten(imp_file, interp_file, feature_table)
     print(f'\nThe top ten features are {gini}')
 
     # Get distribution of the label and put in bins
     print('\n\n==> Separating instances into bins based on label <==')
-    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
     label_bin_df = get_bins(interp_df,'Y')
     print(f'\nSnapshot of dataframe with label bin column added:\n\n {label_bin_df.head()}')
 
@@ -241,7 +252,6 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat, sep_imp,
 
     # Make swarmplots
     print('\n\n==> Making swarmplots <==')
-    feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
     make_swarmplots(interp_df, label_bin_df, gini, out_loc,
                    feature_values, y_name)
     print('\nSwarmplots finished!')
@@ -260,8 +270,6 @@ if __name__ == "__main__":
     default=',')
     parser.add_argument('-sep_feat', type=str, help='delimiter in feature file',
     default=',')
-    parser.add_argument('-sep_imp', type=str, help='delimiter in imp file',
-    default=',')
     parser.add_argument('-y_name', type=str, help='Name of label column in '
     'feature_table', default='Y')
     parser.add_argument('-out_loc', type=str, help='path to save the plots',
@@ -270,4 +278,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.interp_file, args.feature_table, args.imp_file, args.sep_interp,
-    args.sep_feat, args.sep_imp, args.y_name, args.out_loc)
+    args.sep_feat, args.y_name, args.out_loc)
