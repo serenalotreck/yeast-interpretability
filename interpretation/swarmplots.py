@@ -184,25 +184,20 @@ def get_bins(interp_df, value_name):
     return interp_df_binned
 
 
-def get_top_ten(imp_file):
+def get_top_ten(imp, interp_df, feature_values):
     """
     Gets the top ten most important features form the gini importance scores file.
 
     parameters:
-        imp_file, str: path to the gini importance
-        interp_file, str: path to the file containing treeinterpreter output
-            from the ML pipeline
-        feature_table, str: path to the file containing the feature table
+        imp, pandas df: df of gini importances
+        interp_df, pandas df: interpretation dataframe
+        feature_values, pandas df: feature matrix
 
     returns:
         top_ten: list of top ten globally important features
         interp_df, pandas df: interpretation dataframe with only top ten features
         feature_values, pandas df: feature matrix with only top ten features
     """
-    imp = pd.read_csv(imp_file, sep='\t', engine='python')
-    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
-    feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
-
     if len(imp.mean_imp) > 10:
         top_ten = imp.index.tolist()[:10]
         others = imp.index.tolist()[10:]
@@ -225,13 +220,19 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
         feature_table, str: path to the file containing the feature table
         imp_file, str: path to the file containing gini importances from the
             ML pipeline
-    ### FIX    sep, str: delimiter for the above files
+        sep_interp, str: delimiter for interp_file
+        sep_feat, str: delimiter for the feature table
         y_name, str: Name of label column in feature_table
         out_loc, str: path to save plots
     """
+    # Read in the data
+    imp = pd.read_csv(imp_file, sep='\t', engine='python')
+    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
+    feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
+
     # Get the ten features to use in plots
     print('==> Getting top ten most important features <==')
-    gini, interp_df, feature_values = get_top_ten(imp_file, interp_file, feature_table)
+    gini, interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
     print(f'\nThe top ten features are {gini}')
 
     # Get distribution of the label and put in bins
