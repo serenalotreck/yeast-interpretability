@@ -55,9 +55,7 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     bin_df = bin_df.drop(columns=['Y_bin_ID', 'percent_error',
                                 'percent_error_bin_ID', 'Y', 'bias', 'prediction'])
     features_scaled = features_scaled.drop(columns=[y_name])
-    print('\nAfter dropping, number of columns in bin_df and features_scaled are '
-    f'{len(bin_df.columns.values.tolist())} and {len(features_scaled.columns.values.tolist())}')
-
+    
     # Stack bin_df
     bin_df_stacked = pd.DataFrame(bin_df.stack(), columns=['contrib'])
     bin_df_stacked = bin_df_stacked.rename_axis(('ID', 'feature'))
@@ -71,7 +69,6 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     bin_df_stacked = bin_df_stacked.reset_index()
     bin_df_stacked['sub_idx'] = bin_df_stacked.groupby('ID').cumcount()
     bin_df_stacked = bin_df_stacked.set_index(['ID', 'sub_idx'])
-    print(f'\n\nStacked contribution dataframe for this bin:\n{bin_df_stacked}')
 
     # Stack features_scaled
     features_scaled_stacked = pd.DataFrame(features_scaled.stack(), columns=['value'])
@@ -82,13 +79,11 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     features_scaled_stacked = features_scaled_stacked.reset_index()
     features_scaled_stacked['sub_idx'] = features_scaled_stacked.groupby('ID').cumcount()
     features_scaled_stacked = features_scaled_stacked.set_index(['ID', 'sub_idx'])
-    print(f'\n\nStacked feature value dataframe for this bin:\n{features_scaled_stacked}')
 
     # Combine over the feature column and outer index
     plot_df = bin_df_stacked.merge(features_scaled_stacked, left_index=True, right_on=['ID', 'sub_idx'])
-    ## TODO: test that feature names always line up!!!!!!!
-    plot_df = plot_df.drop(columns=['feature_y'])
-    plot_df = plot_df.rename({'feature_x':'feature'})
+    # plot_df = plot_df.drop(columns=['feature_y'])
+    # plot_df = plot_df.rename({'feature_x':'feature'})
     print(f'\n\nSnapshot of dataframe used for plotting:\n{plot_df}')
 
     return plot_df
@@ -133,7 +128,6 @@ def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_na
     for i, bin in enumerate(bins):
         bin_df = label_bin_df[label_bin_df['Y_bin_ID'] == bin].copy()
         bin_df_idx = bin_df.index.values.tolist()
-        print(f'The max index value in this label bin is {max(bin_df_idx)}')
         make_bin_plot(bin_df, features_scaled, y_name)
 
 def get_bins(interp_df, value_name):
@@ -163,19 +157,24 @@ def get_bins(interp_df, value_name):
     max = values.max()
 
     # Get bin bounds
-    bin0 = (min, mean-2*SD)
+    bin0 = mean-2*SD
     bin1 = (mean-2*SD, mean-SD)
     bin2 = (mean-SD, mean)
     bin3 = (mean, mean+SD)
     bin4 = (mean+SD, mean+2*SD)
-    bin5 = (mean+2*SD, max)
+    bin5 = mean+2*SD
     bin_list = [bin0, bin1, bin2, bin3, bin4, bin5]
 
     # Get bin ID for each instance
     bin_col_dfs = []
     for i, bin in enumerate(bin_list):
-        bin_col_df = interp_df[(bin[0] < interp_df[value_name]) &
-                            (interp_df[value_name] < bin[1])].copy()
+        if i == 0:
+            bin_col_df = interp_df[bin > interp_df[value_name]]
+        elif i == 5:
+            bin_col_df = interp_df[bin < interp_df[value_name]]
+        else:
+            bin_col_df = interp_df[(bin[0] < interp_df[value_name]) &
+                                (interp_df[value_name] < bin[1])].copy()
         bin_col_df[f'{value_name}_bin_ID'] = f'{value_name}_bin{i}'
         bin_col_dfs.append(bin_col_df)
 
