@@ -92,7 +92,7 @@ def make_bin_plot(bin_df, features_scaled, y_name):
     # Reshape the data
     plot_df = make_tidy_data(bin_df, features_scaled, y_name)
 
-    # Get error bin names to use as subplot titles and to format plots 
+    # Get error bin names to use as subplot titles and to format plots
     error_bins = plot_df.error_bin_ID.unique()
     if (len(error_bins) % 2) == 0:
         col_wrap_num = 2
@@ -120,6 +120,9 @@ def make_bin_plot(bin_df, features_scaled, y_name):
     # TODO: decide if there should be one colorbar for whole figure, or one on
     # each subplot
     # TODO: figure out how to rename error bin titles with list
+    # TODO: decide if subplot titles should have the bounds for the bins
+    # TODO: figure out why the ticks on the colorbars have different numbers in
+    # different figures 
     plt.savefig(f'{bin_ID[0]}_swarmplot.png')
 
 
