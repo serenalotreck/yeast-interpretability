@@ -2,6 +2,7 @@
 Script to test swarmplots.py
 
 Author: Serena G. Lotreck
+Date: 07/06/2020
 """
 import unittest
 from swarmplots import *

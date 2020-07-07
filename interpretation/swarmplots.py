@@ -25,16 +25,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def swarmplot_with_cbar(cmap, cbar_label, ax, *args, **kwargs):
-    """
-    Function for making a color-gradient swarm plot.
-
-    Adapted from
-    http://savvastjortjoglou.com/intrepretable-machine-learning-nfl-combine
-    """
-    pass
-
-
 def make_tidy_data(bin_df, features_scaled, y_name):
     """
     Reshapes and combines bin_df and features_scaled to be compatible with catplot.
@@ -49,13 +39,12 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     # Get a list of the error bin of all instances
     error_bin_IDs = bin_df.percent_error_bin_ID.copy()
     error_bin_list = error_bin_IDs.unique()
-    print(f'error_bin_IDs = {error_bin_IDs}')
 
     # Drop columns so that bin_df and features_scaled have same col names
     bin_df = bin_df.drop(columns=['Y_bin_ID', 'percent_error',
                                 'percent_error_bin_ID', 'Y', 'bias', 'prediction'])
     features_scaled = features_scaled.drop(columns=[y_name])
-    
+
     # Stack bin_df
     bin_df_stacked = pd.DataFrame(bin_df.stack(), columns=['contrib'])
     bin_df_stacked = bin_df_stacked.rename_axis(('ID', 'feature'))
@@ -82,9 +71,7 @@ def make_tidy_data(bin_df, features_scaled, y_name):
 
     # Combine over the feature column and outer index
     plot_df = bin_df_stacked.merge(features_scaled_stacked, left_index=True, right_on=['ID', 'sub_idx'])
-    # plot_df = plot_df.drop(columns=['feature_y'])
-    # plot_df = plot_df.rename({'feature_x':'feature'})
-    print(f'\n\nSnapshot of dataframe used for plotting:\n{plot_df}')
+    print(f'\n\nSnapshot of dataframe used for plotting:\n{plot_df.head()}')
 
     return plot_df
 
@@ -100,11 +87,40 @@ def make_bin_plot(bin_df, features_scaled, y_name):
     """
     # Get bin ID to use as plot title
     bin_ID = bin_df.Y_bin_ID.unique()
-    print(f'\n\nPlot being made for bin {bin_ID}')
+    print(f'\n\nPlot being made for bin {bin_ID[0]}')
 
     # Reshape the data
     plot_df = make_tidy_data(bin_df, features_scaled, y_name)
 
+    # Get error bin names to use as subplot titles and to format plots 
+    error_bins = plot_df.error_bin_ID.unique()
+    if (len(error_bins) % 2) == 0:
+        col_wrap_num = 2
+    else: col_wrap_num = 1
+    error_bin_titles = [f'Error Bin {x[-1]}' for x in error_bins]
+
+    # Make plot
+    g = plot_df.groupby('feature_x')
+    feat_value = g['value'].mean()
+
+    norm = plt.Normalize(feat_value.min(), feat_value.max())
+    sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
+    sm.set_array([])
+
+    myPlot = sns.catplot(x='feature_x', y='contrib', data=plot_df, kind='swarm',
+                    hue='value', col='error_bin_ID', col_wrap=col_wrap_num,
+                    palette='viridis', legend=False)
+    myPlot.set_xticklabels(rotation=45)
+    myPlot.set_titles("{col_name}")
+    myPlot.set_axis_labels(x_var='Feature', y_var='Contribution')
+    plt.tight_layout(rect=[0,0,1,0.95])
+    plt.suptitle(f'Feature Contributions for {bin_ID[0][0]} bin {bin_ID[0][-1]}')
+    myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
+    # TODO: add label for colorbar
+    # TODO: decide if there should be one colorbar for whole figure, or one on
+    # each subplot
+    # TODO: figure out how to rename error bin titles with list
+    plt.savefig(f'{bin_ID[0]}_swarmplot.png')
 
 
 def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_name):
