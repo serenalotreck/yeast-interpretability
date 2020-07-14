@@ -122,7 +122,7 @@ def make_bin_plot(bin_df, features_scaled, y_name):
     # TODO: figure out how to rename error bin titles with list
     # TODO: decide if subplot titles should have the bounds for the bins
     # TODO: figure out why the ticks on the colorbars have different numbers in
-    # different figures 
+    # different figures
     plt.savefig(f'{bin_ID[0]}_swarmplot.png')
 
 
@@ -228,7 +228,7 @@ def get_top_ten(imp, interp_df, feature_values):
 
 
 def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
-        y_name, out_loc):
+        y_name, feat, out_loc):
     """
     Generates swarmplots.
 
@@ -241,6 +241,7 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
         sep_interp, str: delimiter for interp_file
         sep_feat, str: delimiter for the feature table
         y_name, str: Name of label column in feature_table
+        feat, str: filename with list of features used in model
         out_loc, str: path to save plots
     """
     # Read in the data
@@ -248,6 +249,12 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
     interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
     feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
 
+    if feat != 'all':
+		with open(feat) as f:
+			features = f.read().strip().splitlines()
+			features = [y_name] + features
+            feature_values = feature_values.loc[:,features]
+            
     # Get the ten features to use in plots
     print('==> Getting top ten most important features <==')
     gini, interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
@@ -291,10 +298,12 @@ if __name__ == "__main__":
     default=',')
     parser.add_argument('-y_name', type=str, help='Name of label column in '
     'feature_table', default='Y')
+    parser.add_argument('-feat', type=str, help='File with list of features '
+    'used to train the model, same as ML_regression.py', default='all')
     parser.add_argument('-out_loc', type=str, help='path to save the plots',
     default='')
 
     args = parser.parse_args()
 
     main(args.interp_file, args.feature_table, args.imp_file, args.sep_interp,
-    args.sep_feat, args.y_name, args.out_loc)
+    args.sep_feat, args.y_name, args.feat, args.out_loc)
