@@ -253,7 +253,7 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
         with open(feat) as f:
             features = f.read().strip().splitlines()
             features = [y_name] + features
-            feature_values = feature_values.loc[:,features]
+            feature_values = feature_values[features]
 
     # Get the ten features to use in plots
     print('==> Getting top ten most important features <==')
