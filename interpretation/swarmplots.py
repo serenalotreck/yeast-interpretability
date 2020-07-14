@@ -246,8 +246,8 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
     """
     # Read in the data
     imp = pd.read_csv(imp_file, sep='\t', engine='python')
-    interp_df = pd.read_csv(interp_file, index_col='ID', sep=sep_interp, engine='python')
-    feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
+    interp_df = pd.read_csv(interp_file, index_col=0, sep=sep_interp, engine='python')
+    feature_values = pd.read_csv(feature_table, index_col=0, sep=sep_feat, engine='python')
 
     if feat != 'all':
         with open(feat) as f:
