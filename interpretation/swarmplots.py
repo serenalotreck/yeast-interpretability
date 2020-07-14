@@ -250,11 +250,11 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
     feature_values = pd.read_csv(feature_table, index_col='ID', sep=sep_feat, engine='python')
 
     if feat != 'all':
-		with open(feat) as f:
-			features = f.read().strip().splitlines()
-			features = [y_name] + features
+        with open(feat) as f:
+            features = f.read().strip().splitlines()
+            features = [y_name] + features
             feature_values = feature_values.loc[:,features]
-            
+
     # Get the ten features to use in plots
     print('==> Getting top ten most important features <==')
     gini, interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
