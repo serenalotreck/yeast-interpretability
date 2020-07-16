@@ -1,7 +1,5 @@
 """
-Script to create swarmplots for local model interpretation.
-
-Operates on the treeinterpreter output from the Shiu Lab ML Pipeline.
+Script to create swarmplots for independent local model interpretation.
 
 Author: Serena G. Lotreck, with swarmplot code adapted from
 http://savvastjortjoglou.com/intrepretable-machine-learning-nfl-combine
