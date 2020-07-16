@@ -186,9 +186,9 @@ def get_bins(interp_df, value_name):
     bin_col_dfs = []
     for i, bin in enumerate(bin_list):
         if i == 0:
-            bin_col_df = interp_df[bin > interp_df[value_name]]
+            bin_col_df = interp_df[bin > interp_df[value_name]].copy()
         elif i == 5:
-            bin_col_df = interp_df[bin < interp_df[value_name]]
+            bin_col_df = interp_df[bin < interp_df[value_name]].copy()
         else:
             bin_col_df = interp_df[(bin[0] < interp_df[value_name]) &
                                 (interp_df[value_name] < bin[1])].copy()
@@ -243,14 +243,15 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
         out_loc, str: path to save plots
     """
     # Read in the data
-    imp = pd.read_csv(imp_file, sep='\t', engine='python')
+    imp = pd.read_csv(imp_file, index_col=0, sep='\t', engine='python')
     interp_df = pd.read_csv(interp_file, index_col=0, sep=sep_interp, engine='python')
     feature_values = pd.read_csv(feature_table, index_col=0, sep=sep_feat, engine='python')
-
+    print(f'first five column names: {feature_values.columns.values.tolist()[:5]}')
     if feat != 'all':
         with open(feat) as f:
             features = f.read().strip().splitlines()
             features = [y_name] + features
+            print(f'first five of features list: {features[:5]}')
             feature_values = feature_values[features]
 
     # Get the ten features to use in plots
@@ -260,13 +261,13 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
 
     # Get distribution of the label and put in bins
     print('\n\n==> Separating instances into bins based on label <==')
-    label_bin_df = get_bins(interp_df,'Y')
+    label_bin_df = get_bins(interp_df, y_name)
     print(f'\nSnapshot of dataframe with label bin column added:\n\n {label_bin_df.head()}')
 
     # get error for all instances
     print('\n\n==> Calculating error for all instances <==')
-    label_bin_df['percent_error'] = label_bin_df.apply(lambda x: mp.calculate_error(x.prediction,
-                                x.Y), axis=1)
+    label_bin_df['percent_error'] = label_bin_df.apply(lambda x: mp.calculate_error(x['prediction'],
+                                x[y_name], axis=1))
     print(f'\nSnapshot of dataframe with error column added:\n\n {label_bin_df.head()}')
 
     # Split each label bin into error bins
