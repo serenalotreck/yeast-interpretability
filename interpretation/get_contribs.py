@@ -58,13 +58,13 @@ def jointContribs(feature_df, test_df, model, y_name, save):
         df_idx = frame.index
         pred_bias_df = pd.DataFrame({'prediction':prediction, 'bias':bias},
                                     index=df_idx)
-        pred_bias_df.to_csv(f'{save}{set}_joint_bias_and_prediction.csv')
+        pred_bias_df.to_csv(f'{save}/{set}_joint_bias_and_prediction.csv')
         print('Joint bias and prediction saved! \nSnapshot of saved file:\n '
         f'{pred_bias_df.head()}')
 
         # Save contributions as .npy binary file
-        np.save(f'{save}{set}_joint_contributions.npy', contributions)
-        print('Joint contributions saved!')
+        np.save(f'{save}/{set}_joint_contributions.npy', contributions)
+        print(f'Joint contributions for {set} saved!')
 
 def independentContribs(feature_df, test_df, model, y_name, save):
     """
@@ -91,10 +91,10 @@ def independentContribs(feature_df, test_df, model, y_name, save):
         # Make df where columns are ID, label, bias, prediction, contributions
         local_interp_df = pd.concat([interp_df_half, contrib_df], axis=1)
 
-        local_interp_df.to_csv(f'{save}{set}_independent_contribs.csv')
+        local_interp_df.to_csv(f'{save}/{set}_independent_contribs.csv')
 
-        print('Independent contributions saved!\nSnapshot of saved file:\n '
-        f'{local_interp_df.iloc[:5,:5]}')
+        print(f'Independent contributions for {set} saved!')
+        print(f'Snapshot of saved file:\n{local_interp_df.iloc[:5,:5]}')
 
 
 def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
