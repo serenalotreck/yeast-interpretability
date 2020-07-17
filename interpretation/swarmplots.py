@@ -13,6 +13,7 @@ http://savvastjortjoglou.com/intrepretable-machine-learning-nfl-combine
 # 4. make swarmplots for each label bin (6 plots per bin, 36 total)
 
 import argparse
+import os
 
 import mispredictions as mp
 import pandas as pd
@@ -39,8 +40,8 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     error_bin_list = error_bin_IDs.unique()
 
     # Drop columns so that bin_df and features_scaled have same col names
-    bin_df = bin_df.drop(columns=['Y_bin_ID', 'percent_error',
-                                'percent_error_bin_ID', 'Y', 'bias', 'prediction'])
+    bin_df = bin_df.drop(columns=[f'{y_name}_bin_ID', 'percent_error',
+                                'percent_error_bin_ID', y_name, 'bias', 'prediction'])
     features_scaled = features_scaled.drop(columns=[y_name])
 
     # Stack bin_df
@@ -84,8 +85,8 @@ def make_bin_plot(bin_df, features_scaled, y_name):
         y_name, str: Name of label column in feature_table
     """
     # Get bin ID to use as plot title
-    bin_ID = bin_df.Y_bin_ID.unique()
-    print(f'\n\nPlot being made for bin {bin_ID[0]}')
+    bin_ID = bin_df[f'{y_name}_bin_ID'].unique()
+    print(f'\n\nPlot being made for {bin_ID[0]}')
 
     # Reshape the data
     plot_df = make_tidy_data(bin_df, features_scaled, y_name)
@@ -141,9 +142,9 @@ def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_na
     features_scaled = feature_values.apply(lambda x: x/x.max())
 
     # Make plots
-    bins = label_bin_df.Y_bin_ID.unique()
+    bins = label_bin_df[f'{y_name}_bin_ID'].unique()
     for i, bin in enumerate(bins):
-        bin_df = label_bin_df[label_bin_df['Y_bin_ID'] == bin].copy()
+        bin_df = label_bin_df[label_bin_df[f'{y_name}_bin_ID'] == bin].copy()
         bin_df_idx = bin_df.index.values.tolist()
         make_bin_plot(bin_df, features_scaled, y_name)
 
@@ -226,7 +227,7 @@ def get_top_ten(imp, interp_df, feature_values):
 
 
 def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
-        y_name, feat, out_loc):
+        y_name, feature_selection, out_loc):
     """
     Generates swarmplots.
 
@@ -239,7 +240,7 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
         sep_interp, str: delimiter for interp_file
         sep_feat, str: delimiter for the feature table
         y_name, str: Name of label column in feature_table
-        feat, str: filename with list of features used in model
+        feature_selection, str: filename with list of features used in model
         out_loc, str: path to save plots
     """
     # Read in the data
@@ -247,8 +248,8 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
     interp_df = pd.read_csv(interp_file, index_col=0, sep=sep_interp, engine='python')
     feature_values = pd.read_csv(feature_table, index_col=0, sep=sep_feat, engine='python')
     print(f'first five column names: {feature_values.columns.values.tolist()[:5]}')
-    if feat != 'all':
-        with open(feat) as f:
+    if os.path.isfile(feature_selection):
+        with open(feature_selection) as f:
             features = f.read().strip().splitlines()
             features = [y_name] + features
             print(f'first five of features list: {features[:5]}')
@@ -266,8 +267,8 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
 
     # get error for all instances
     print('\n\n==> Calculating error for all instances <==')
-    label_bin_df['percent_error'] = label_bin_df.apply(lambda x: mp.calculate_error(x['prediction'],
-                                x[y_name], axis=1))
+    label_bin_df['percent_error'] = mp.calculate_error(label_bin_df['prediction'],
+                                                        label_bin_df[y_name])
     print(f'\nSnapshot of dataframe with error column added:\n\n {label_bin_df.head()}')
 
     # Split each label bin into error bins
@@ -297,12 +298,19 @@ if __name__ == "__main__":
     default=',')
     parser.add_argument('-y_name', type=str, help='Name of label column in '
     'feature_table', default='Y')
-    parser.add_argument('-feat', type=str, help='File with list of features '
-    'used to train the model, same as ML_regression.py', default='all')
+    parser.add_argument('-feature_selection', type=str, help='File with list of '
+    'features used to train the model, same as ML_regression.py', default='')
     parser.add_argument('-out_loc', type=str, help='path to save the plots',
     default='')
 
     args = parser.parse_args()
 
+    args.interp_file = os.path.abspath(args.interp_file)
+    args.feature_table = os.path.abspath(args.feature_table)
+    args.imp_file = os.path.abspath(args.imp_file)
+    args.feature_selection = os.path.abspath(args.feature_selection)
+    args.out_loc = os.path.abspath(args.out_loc)
+
+
     main(args.interp_file, args.feature_table, args.imp_file, args.sep_interp,
-    args.sep_feat, args.y_name, args.feat, args.out_loc)
+    args.sep_feat, args.y_name, args.feature_selection, args.out_loc)
