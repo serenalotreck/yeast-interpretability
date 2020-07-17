@@ -4,14 +4,6 @@ Script to create swarmplots for independent local model interpretation.
 Author: Serena G. Lotreck, with swarmplot code adapted from
 http://savvastjortjoglou.com/intrepretable-machine-learning-nfl-combine
 """
-# STEPS:
-# 0. get top ten overall features from imp file
-# 1. get distribution of labels
-# 2. split into 6 bins
-# 3. calculate error for all instances in each bin
-# 3. within each bin, split the instances into bins by error (same scheme of SDs)
-# 4. make swarmplots for each label bin (6 plots per bin, 36 total)
-
 import argparse
 import os
 
@@ -125,7 +117,7 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     plt.savefig(f'{out_loc}/{bin_ID[0]}_swarmplot.png')
 
 
-def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_name):
+def make_swarmplots(interp_df, label_bin_df, out_loc, feature_values, y_name):
     """
     Makes six matplotlib figures, each with 6 subfigures. Each figure corresponds
     to one label bin, and each subplot is for an error bin within that label bin.
@@ -133,7 +125,6 @@ def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_na
     parameters:
         interp_df, pandas df: full dataframe from interp_file
         label_bin_df, pandas df: interp_df with columns for bin IDs
-        gini, list: ten features to include on swarmplots
         out_loc, str: path to save figures
         feature_values, pandas df: feature table
         y_name, str: Name of label column in feature_table
@@ -203,17 +194,22 @@ def get_bins(interp_df, value_name):
 
 def get_top_ten(imp, interp_df, feature_values):
     """
-    Gets the top ten most important features form the gini importance scores file.
+    Drops all features besides top ten from interp_df and feature_values,
+    and renames features with shorter names. Saves a file with the top ten
+    feature names and their aliases.
 
     parameters:
         imp, pandas df: df of gini importances
-        interp_df, pandas df: interpretation dataframe
-        feature_values, pandas df: feature matrix
+        interp_df, pandas df: interpretation dataframe. MUST have the format:
+            | y_name | bias | prediction | feature1 | ... | featureN
+        feature_values, pandas df: feature matrix. MUST have the format
+            | y_name | feature1 | ... | featureN
 
     returns:
-        top_ten: list of top ten globally important features
-        interp_df, pandas df: interpretation dataframe with only top ten features
-        feature_values, pandas df: feature matrix with only top ten features
+        interp_df, pandas df: interpretation dataframe with only top ten
+            features, renamed feature1 to feature10
+        feature_values, pandas df: feature matrix with only top ten features,
+            renamed feature1 to feature10
     """
     if len(imp.mean_imp) > 10:
         top_ten = imp.index.tolist()[:10]
@@ -223,7 +219,42 @@ def get_top_ten(imp, interp_df, feature_values):
     else:
         top_ten = imp.index.tolist()
 
-    return top_ten, interp_df, feature_values
+    print(f'\nTop ten most improtant features are: {top_ten}')
+
+    # Rename features
+    orig_names_interp = interp_df.columns.values.tolist()
+    orig_names_feat = feature_values.columns.values.tolist()
+
+    rename_interp_dict = {}
+    for i, name in enumerate(orig_names_interp):
+        if i < 3:
+            rename_interp_dict[name] = name
+        else:
+            rename_interp_dict[name] = f'feature{i-3}'
+
+    rename_featval_dict = {}
+    for i, name in enumerate(orig_names_feat):
+        if i == 0:
+            rename_featval_dict[name] = name
+        elif i == 1:
+            rename_featval_dict['NA1'] = 'NA1'
+            rename_featval_dict['NA2'] = 'NA2'
+            rename_featval_dict[name] = f'feature{i-1}'
+        else:
+            rename_featval_dict[name] = f'feature{i-1}'
+
+    interp_df = interp_df.rename(columns=rename_interp_dict)
+    feature_values = feature_values.rename(columns=rename_featval_dict)
+
+    interp_convert = pd.DataFrame(list(rename_interp_dict.items()),
+                                columns=['old_interp', 'new_interp'])
+    feat_convert = pd.DataFrame(list(rename_featval_dict.items()),
+                                columns=['old_feature_values', 'new_feature_values'])
+
+    name_df = pd.concat([interp_convert, feat_convert], axis=1)
+    name_df.to_csv('feature_name_conversion.csv', index=False)
+
+    return interp_df, feature_values
 
 
 def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
@@ -257,8 +288,7 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
 
     # Get the ten features to use in plots
     print('==> Getting top ten most important features <==')
-    gini, interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
-    print(f'\nThe top ten features are {gini}')
+    interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
 
     # Get distribution of the label and put in bins
     print('\n\n==> Separating instances into bins based on label <==')
@@ -278,7 +308,7 @@ def main(interp_file, feature_table, imp_file, sep_interp, sep_feat,
 
     # Make swarmplots
     print('\n\n==> Making swarmplots <==')
-    make_swarmplots(interp_df, label_bin_df, gini, out_loc,
+    make_swarmplots(interp_df, label_bin_df, out_loc,
                    feature_values, y_name)
     print('\nSwarmplots finished!')
 
