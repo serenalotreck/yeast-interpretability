@@ -145,9 +145,7 @@ class TestPercentError(unittest.TestCase):
         # True answer
         percent_error = []
         for pr, tr in zip(pred, true):
-            error = abs(pr-tr)
-            error = error/tr
-            error = error*100
+            error = abs((pr-tr)/tr)*100
             percent_error.append(error)
         df_right_answer = pd.DataFrame({'pred':pred, 'true':true,
                                         'percent_error':percent_error})
