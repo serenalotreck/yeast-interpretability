@@ -75,7 +75,7 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     return plot_df
 
 
-def make_bin_plot(bin_df, features_scaled, y_name):
+def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     """
     Makes one figure with error bin # of subplots.
 
@@ -122,7 +122,7 @@ def make_bin_plot(bin_df, features_scaled, y_name):
     # TODO: decide if subplot titles should have the bounds for the bins
     # TODO: figure out why the ticks on the colorbars have different numbers in
     # different figures
-    plt.savefig(f'{bin_ID[0]}_swarmplot.png')
+    plt.savefig(f'{out_loc}/{bin_ID[0]}_swarmplot.png')
 
 
 def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_name):
@@ -146,7 +146,7 @@ def make_swarmplots(interp_df, label_bin_df, gini, out_loc, feature_values, y_na
     for i, bin in enumerate(bins):
         bin_df = label_bin_df[label_bin_df[f'{y_name}_bin_ID'] == bin].copy()
         bin_df_idx = bin_df.index.values.tolist()
-        make_bin_plot(bin_df, features_scaled, y_name)
+        make_bin_plot(bin_df, features_scaled, y_name, out_loc)
 
 def get_bins(interp_df, value_name):
     """
