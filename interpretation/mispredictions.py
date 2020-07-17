@@ -14,7 +14,7 @@ def calculate_error(predicted,true):
 
     Returns: the percent error
     """
-    return (abs(predicted-true)/true)*100
+    return (abs(predicted-true/true))*100
 
 
 def define_category(error):
