@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from pandas._testing import assert_frame_equal
 from pandas.testing import assert_series_equal
+import mispredictions as mp
 
 class TestTopTen(unittest.TestCase):
     """
@@ -132,6 +133,27 @@ class TestTopTen(unittest.TestCase):
         self.assertEqual(gini, gini_true)
         assert_frame_equal(interp_result, interp_df)
         assert_frame_equal(feature_result, feature_values)
+
+class TestPercentError(unittest.TestCase):
+    def test_mp_calculate_error(self):
+        pred = [-3, -0.01, 0.5, 2]
+        true = [-2, 4, 0.6, 17]
+        df = pd.DataFrame({'pred':pred, 'true':true})
+        # Function answer
+        df['percent_error'] = mp.calculate_error(df['pred'], df['true'])
+
+        # True answer
+        percent_error = []
+        for pr, tr in zip(pred, true):
+            error = abs(pr-tr)
+            error = error/tr
+            error = error*100
+            percent_error.append(error)
+        df_right_answer = pd.DataFrame({'pred':pred, 'true':true,
+                                        'percent_error':percent_error})
+
+        assert_frame_equal(df_right_answer, df)
+
 
 
 class TestGetBins(unittest.TestCase):
