@@ -28,12 +28,12 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     returns:
     """
     # Get a list of the error bin of all instances
-    error_bin_IDs = bin_df.abs_error_bin_ID.copy()
+    error_bin_IDs = bin_df.abs_error_bin.copy()
     error_bin_list = error_bin_IDs.unique()
 
     # Drop columns so that bin_df and features_scaled have same col names
-    bin_df = bin_df.drop(columns=[f'{y_name}_bin_ID', 'abs_error',
-                                'abs_error_bin_ID', y_name, 'bias', 'prediction'])
+    bin_df = bin_df.drop(columns=['label_bin', 'abs_error',
+                                'abs_error_bin', y_name, 'bias', 'prediction'])
     features_scaled = features_scaled.drop(columns=[y_name])
 
     # Stack bin_df
@@ -77,8 +77,9 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
         y_name, str: Name of label column in feature_table
     """
     # Get bin ID to use as plot title
-    bin_ID = bin_df[f'{y_name}_bin_ID'].unique()
-    print(f'\n\nPlot being made for {bin_ID[0]}')
+    bin_ID = bin_df["label_bin"].unique()[0]
+    plot_title = f'label {" ".join(bin_ID.split("_"))}'
+    print(f'\n\nPlot being made for {plot_title}')
 
     # Reshape the data
     plot_df = make_tidy_data(bin_df, features_scaled, y_name)
@@ -105,22 +106,21 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     myPlot.set_titles("{col_name}")
     myPlot.set_axis_labels(x_var='Feature', y_var='Contribution')
     plt.tight_layout(rect=[0,0,1,0.95])
-    plt.suptitle(f'Feature Contributions for {bin_ID[0][0]} bin {bin_ID[0][-1]}')
+    plt.suptitle(f'Feature Contributions for {plot_title}')
     myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
     # TODO: add label for colorbar
-    # TODO: decide if there should be one colorbar for whole figure, or one on
-    # each subplot
     # TODO: figure out how to rename error bin titles with list
     # TODO: decide if subplot titles should have the bounds for the bins
     # TODO: figure out why the ticks on the colorbars have different numbers in
     # different figures
-    plt.savefig(f'{out_loc}/{bin_ID[0]}_swarmplot.png')
+    plt.savefig(f'{out_loc}/{bin_ID}_swarmplot.png')
 
 
 def make_swarmplots(interp_df, out_loc, feature_values, y_name):
     """
-    Makes six matplotlib figures, each with 6 subfigures. Each figure corresponds
-    to one label bin, and each subplot is for an error bin within that label bin.
+    Makes four matplotlib figures, each with up to 3 subfigures. Each figure
+    corresponds to one label bin, and each subplot is for an error bin within
+    that label bin.
 
     parameters:
         interp_df, pandas df: interp_df with columns for bin IDs
@@ -132,37 +132,113 @@ def make_swarmplots(interp_df, out_loc, feature_values, y_name):
     features_scaled = feature_values.apply(lambda x: x/x.max())
 
     # Make plots
-    bins = interp_df[f'{y_name}_bin_ID'].unique()
+    bins = interp_df['label_bin'].unique()
     for i, bin in enumerate(bins):
-        bin_df = interp_df[interp_df[f'{y_name}_bin_ID'] == bin].copy()
+        bin_df = interp_df[interp_df['label_bin'] == bin].copy()
         bin_df_idx = bin_df.index.values.tolist()
         make_bin_plot(bin_df, features_scaled, y_name, out_loc)
 
 
-def assign_error_bins(value_name, mean, std):
+def get_error_bins(interp_df, y_name):
     """
-    Function to assign error bin ID absed on absolute error
+    Calculates absolute error and bins instances based on this value.
+
+    parameters:
+        interp_df, pandas df: interpretation dataframe. MUST have the columns:
+            | y_name | prediction | ...
+        y_name, str: name of the label column
+
+    returns: interp_df with abs_error and abs_error_bin columns
     """
-    if value_name <= mean-0.5*std:
-        return f'abs_error_bin0'
-    elif mean-0.5*std < value_name <= mean+0.5*std:
-        return f'abs_error_bin1'
-    elif mean+0.5*std < value_name:
-        return f'abs_error_bin2'
+    # Get error for all instances
+    print('\nCalculating error for all instances...')
+    interp_df['abs_error'] = interp_df[y_name] - interp_df['prediction']
+    print(f'\nSnapshot of dataframe with error column added:\n\n {interp_df.head()}')
+
+    # Assign bins
+    mean = interp_df['abs_error'].mean()
+    std = interp_df['abs_error'].std()
+    bins_error = [interp_df.abs_error.min()-1,
+                    interp_df.abs_error.mean() - 0.5*interp_df[y_name].std(),
+                    interp_df.abs_error.mean() + 0.5*interp_df[y_name].std(),
+                    interp_df.abs_error.max()+1]
+    interp_df['abs_error_bin'] = pd.cut(interp_df.abs_error, bins=bins_error,
+                                        labels=['bin0', 'bin1', 'bin2'])
+    return interp_df
 
 
-def assign_quartile_bins(value_name, q1, q2, q3, y_name):
+def get_label_bins(interp_df, y_name):
     """
-    Function to assign Y binID based on value in value_name column
+    Splits data into quartile bins based on label column.
+
+    parameters:
+        interp_df, pandas df: interpretation dataframe. MUST have the column:
+            | y_name | ...
+        y_name, str: name of the label column
+
+    returns: interp_df with the label_bin column added
     """
-    if value_name <= q1:
-        return f'{y_name}_q1'
-    elif q1 < value_name <= q2:
-        return f'{y_name}_q2'
-    elif q2 < value_name <= q3:
-        return f'{y_name}_q3'
-    elif value_name > q3:
-        return f'{y_name}_q4'
+    q1, q2, q3 = np.percentile(interp_df[y_name], [25, 50, 75])
+    bins_label = [interp_df[y_name].min()-1,
+                    q1,
+                    q2,
+                    q3,
+                    interp_df[y_name].max()+1]
+    interp_df['label_bin'] = pd.cut(interp_df[y_name], bins=bins_label,
+                                    labels=['first_quartile', 'second_quartile',
+                                            'third_quartile', 'fourth_quartile'])
+    return interp_df
+
+
+def rename_features(interp_df, feature_values):
+    """
+    Renames features as feature1... feature10.
+
+    parameters:
+        interp_df, pandas df: interpretation dataframe. MUST have the format:
+            | y_name | bias | prediction | feature1 | ... | featureN
+        feature_values, pandas df: feature matrix. MUST have the format
+            | y_name | feature1 | ... | featureN
+
+    returns:
+        interp_df, pandas df: interpretation dataframe with only top ten
+            features, renamed feature1 to feature10
+        feature_values, pandas df: feature matrix with only top ten features,
+            renamed feature1 to feature10
+    """
+    orig_names_interp = interp_df.columns.values.tolist()
+    orig_names_feat = feature_values.columns.values.tolist()
+
+    rename_interp_dict = {}
+    for i, name in enumerate(orig_names_interp):
+        if i < 3:
+            rename_interp_dict[name] = name
+        else:
+            rename_interp_dict[name] = f'feature{i-3}'
+
+    rename_featval_dict = {}
+    for i, name in enumerate(orig_names_feat):
+        if i == 0:
+            rename_featval_dict[name] = name
+        elif i == 1:
+            rename_featval_dict['NA1'] = 'NA1' ##TODO figure out what the hell these two lines are for
+            rename_featval_dict['NA2'] = 'NA2'
+            rename_featval_dict[name] = f'feature{i-1}'
+        else:
+            rename_featval_dict[name] = f'feature{i-1}'
+
+    interp_df = interp_df.rename(columns=rename_interp_dict)
+    feature_values = feature_values.rename(columns=rename_featval_dict)
+
+    interp_convert = pd.DataFrame(list(rename_interp_dict.items()),
+                                columns=['old_interp', 'new_interp'])
+    feat_convert = pd.DataFrame(list(rename_featval_dict.items()),
+                                columns=['old_feature_values', 'new_feature_values'])
+
+    name_df = pd.concat([interp_convert, feat_convert], axis=1)
+    name_df.to_csv('feature_name_conversion.csv', index=False)
+
+    return interp_df, feature_values
 
 
 def get_top_ten(imp, interp_df, feature_values):
@@ -193,40 +269,10 @@ def get_top_ten(imp, interp_df, feature_values):
     else:
         top_ten = imp.index.tolist()
 
-    print(f'\nTop ten most improtant features are: {top_ten}')
+    print(f'\nTop ten most important features are: {top_ten}')
 
     # Rename features
-    orig_names_interp = interp_df.columns.values.tolist()
-    orig_names_feat = feature_values.columns.values.tolist()
-
-    rename_interp_dict = {}
-    for i, name in enumerate(orig_names_interp):
-        if i < 3:
-            rename_interp_dict[name] = name
-        else:
-            rename_interp_dict[name] = f'feature{i-3}'
-
-    rename_featval_dict = {}
-    for i, name in enumerate(orig_names_feat):
-        if i == 0:
-            rename_featval_dict[name] = name
-        elif i == 1:
-            rename_featval_dict['NA1'] = 'NA1'
-            rename_featval_dict['NA2'] = 'NA2'
-            rename_featval_dict[name] = f'feature{i-1}'
-        else:
-            rename_featval_dict[name] = f'feature{i-1}'
-
-    interp_df = interp_df.rename(columns=rename_interp_dict)
-    feature_values = feature_values.rename(columns=rename_featval_dict)
-
-    interp_convert = pd.DataFrame(list(rename_interp_dict.items()),
-                                columns=['old_interp', 'new_interp'])
-    feat_convert = pd.DataFrame(list(rename_featval_dict.items()),
-                                columns=['old_feature_values', 'new_feature_values'])
-
-    name_df = pd.concat([interp_convert, feat_convert], axis=1)
-    name_df.to_csv('feature_name_conversion.csv', index=False)
+    interp_df, feature_values = rename_features(interp_df, feature_values)
 
     return interp_df, feature_values
 
@@ -243,29 +289,17 @@ def main(interp_df, feature_values, imp, y_name, out_loc):
         out_loc, str: path to save plots
     """
     # Get the ten features to use in plots
-    print('==> Getting top ten most important features <==')
+    print('\n\n==> Getting top ten most important features <==')
     interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
 
     # Get distribution of the label and put in bins
     print('\n\n==> Separating instances into bins based on label <==')
-    percentiles = np.percentile(interp_df[y_name], [25, 50, 75])
-    interp_df['label_bin'] = interp_df.apply(lambda x: my_func(x['y_name'],
-                                            percentiles[0], percentiles[1],
-                                            percentiles[2], y_name), axis=1)
-    print(f'\nSnapshot of dataframe with label bin column added:\n\n {_df.head()}')
-
-    # get error for all instances
-    print('\n\n==> Calculating error for all instances <==')
-    interp_df['abs_error'] = interp_df[y_name] - interp_df['prediction']
-
-    print(f'\nSnapshot of dataframe with error column added:\n\n {interp_df.head()}')
+    interp_df = get_label_bins(interp_df, y_name)
+    print(f'\nSnapshot of dataframe with label bin column added:\n\n {interp_df.head()}')
 
     # Split each label bin into error bins
     print('\n\n==> Separating instances into bins by error <==')
-    interp_df['abs_error_bin'] = interp_df.apply(lambda x: assign_error_bins(
-                                                            x['abs_error'],
-                                                            x['abs_error'].mean(),
-                                                            x['abs_error'].std()))
+    interp_df = get_error_bins(interp_df, y_name)
     print(f'\nSnapshot of dataframe with error bin column added:\n\n {interp_df.head()}')
 
     # Make swarmplots
@@ -308,7 +342,6 @@ if __name__ == "__main__":
     imp = pd.read_csv(args.imp_file, index_col=0, sep='\t', engine='python')
     interp_df = pd.read_csv(args.interp_file, index_col=0, sep=args.sep_interp, engine='python')
     feature_values = pd.read_csv(args.feature_table, index_col=0, sep=args.sep_feat, engine='python')
-    print(f'first five column names: {feature_values.columns.values.tolist()[:5]}')
 
     # Subset selected features if applicable
     if os.path.isfile(args.feature_selection):
