@@ -32,7 +32,7 @@ def make_tidy_data(bin_df, features_scaled, y_name):
     error_bin_list = error_bin_IDs.unique()
 
     # Drop columns so that bin_df and features_scaled have same col names
-    bin_df = bin_df.drop(columns=['label_bin', 'abs_error',
+    bin_df = bin_df.drop(columns=[f'{y_name}_bin', 'abs_error',
                                 'abs_error_bin', y_name, 'bias', 'prediction'])
     features_scaled = features_scaled.drop(columns=[y_name])
 
@@ -77,7 +77,7 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
         y_name, str: Name of label column in feature_table
     """
     # Get bin ID to use as plot title
-    bin_ID = bin_df["label_bin"].unique()[0]
+    bin_ID = bin_df[f'{y_name}_bin'].unique()[0]
     plot_title = f'label {" ".join(bin_ID.split("_"))}'
     print(f'\n\nPlot being made for {plot_title}')
 
@@ -86,10 +86,10 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
 
     # Get error bin names to use as subplot titles and to format plots
     error_bins = plot_df.error_bin_ID.unique()
+    print(f'error_bins list for plot: {error_bins}')
     if (len(error_bins) % 2) == 0:
         col_wrap_num = 2
     else: col_wrap_num = 1
-    error_bin_titles = [f'Error Bin {x[-1]}' for x in error_bins]
 
     # Make plot
     g = plot_df.groupby('feature_x')
@@ -103,14 +103,12 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
                     hue='value', col='error_bin_ID', col_wrap=col_wrap_num,
                     palette='viridis', legend=False)
     myPlot.set_xticklabels(rotation=45)
-    myPlot.set_titles("{col_name}")
+    myPlot.set_titles("Error bin: {col_name}")
     myPlot.set_axis_labels(x_var='Feature', y_var='Contribution')
     plt.tight_layout(rect=[0,0,1,0.95])
     plt.suptitle(f'Feature Contributions for {plot_title}')
     myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
     # TODO: add label for colorbar
-    # TODO: figure out how to rename error bin titles with list
-    # TODO: decide if subplot titles should have the bounds for the bins
     # TODO: figure out why the ticks on the colorbars have different numbers in
     # different figures
     plt.savefig(f'{out_loc}/{bin_ID}_swarmplot.png')
@@ -118,9 +116,11 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
 
 def make_swarmplots(interp_df, out_loc, feature_values, y_name):
     """
-    Makes four matplotlib figures, each with up to 3 subfigures. Each figure
+    Makes four matplotlib figures, each with 4 subplots. Each figure
     corresponds to one label bin, and each subplot is for an error bin within
     that label bin.
+
+    Error bins are calculated here, within each label bin.
 
     parameters:
         interp_df, pandas df: interp_df with columns for bin IDs
@@ -132,59 +132,38 @@ def make_swarmplots(interp_df, out_loc, feature_values, y_name):
     features_scaled = feature_values.apply(lambda x: x/x.max())
 
     # Make plots
-    bins = interp_df['label_bin'].unique()
+    bins = interp_df[f'{y_name}_bin'].unique()
     for i, bin in enumerate(bins):
-        bin_df = interp_df[interp_df['label_bin'] == bin].copy()
+        bin_df = interp_df[interp_df[f'{y_name}_bin'] == bin].copy()
+        # Split each label bin into error bins
+        print('\n\n==> Separating instances in label {bin} into bins by error <==')
+        bin_df = get_quartile_bins(bin_df, 'abs_error')
+        print(f'\nSnapshot of dataframe with error bin column added:\n\n {bin_df.head()}')
         bin_df_idx = bin_df.index.values.tolist()
         make_bin_plot(bin_df, features_scaled, y_name, out_loc)
 
 
-def get_error_bins(interp_df, y_name):
-    """
-    Calculates absolute error and bins instances based on this value.
-
-    parameters:
-        interp_df, pandas df: interpretation dataframe. MUST have the columns:
-            | y_name | prediction | ...
-        y_name, str: name of the label column
-
-    returns: interp_df with abs_error and abs_error_bin columns
-    """
-    # Get error for all instances
-    print('\nCalculating error for all instances...')
-    interp_df['abs_error'] = interp_df[y_name] - interp_df['prediction']
-    print(f'\nSnapshot of dataframe with error column added:\n\n {interp_df.head()}')
-
-    # Assign bins
-    mean = interp_df['abs_error'].mean()
-    std = interp_df['abs_error'].std()
-    bins_error = [interp_df.abs_error.min()-1,
-                    interp_df.abs_error.mean() - 0.5*interp_df[y_name].std(),
-                    interp_df.abs_error.mean() + 0.5*interp_df[y_name].std(),
-                    interp_df.abs_error.max()+1]
-    interp_df['abs_error_bin'] = pd.cut(interp_df.abs_error, bins=bins_error,
-                                        labels=['bin0', 'bin1', 'bin2'])
-    return interp_df
-
-
-def get_label_bins(interp_df, y_name):
+def get_quartile_bins(interp_df, col_name):
     """
     Splits data into quartile bins based on label column.
 
     parameters:
-        interp_df, pandas df: interpretation dataframe. MUST have the column:
+        interp_df, pandas df: interpretation dataframe.
+            If used for labels, MUST have the column:
             | y_name | ...
-        y_name, str: name of the label column
+            If used for error, MUSt have the column
+            | abs_error |
+        col_name, str: name of the column to use for splits
 
-    returns: interp_df with the label_bin column added
+    returns: interp_df with the {col_name}_bin column added
     """
-    q1, q2, q3 = np.percentile(interp_df[y_name], [25, 50, 75])
-    bins_label = [interp_df[y_name].min()-1,
+    q1, q2, q3 = np.percentile(interp_df[col_name], [25, 50, 75])
+    bins_label = [interp_df[col_name].min()-1,
                     q1,
                     q2,
                     q3,
-                    interp_df[y_name].max()+1]
-    interp_df['label_bin'] = pd.cut(interp_df[y_name], bins=bins_label,
+                    interp_df[col_name].max()+1]
+    interp_df[f'{col_name}_bin'] = pd.cut(interp_df[col_name], bins=bins_label,
                                     labels=['first_quartile', 'second_quartile',
                                             'third_quartile', 'fourth_quartile'])
     return interp_df
@@ -257,14 +236,18 @@ def get_top_ten(imp, interp_df, feature_values):
     returns:
         interp_df, pandas df: interpretation dataframe with only top ten
             features, renamed feature1 to feature10
-        feature_values, pandas df: feature matrix with only top ten features,
+        feature_values, pandas df: feature matrix with only top ten # Split each label bin into error bins
+    print('\n\n==> Separating instances into bins by error <==')
+    interp_df = get_quartile_bins(interp_df, 'abs_error')
+    print(f'\nSnapshot of dataframe with error bin column added:\n\n {interp_df.head()}')features,
             renamed feature1 to feature10
     """
     # Get top ten and drop others
     if len(imp.mean_imp) > 10:
         top_ten = imp.index.tolist()[:10]
         others = imp.index.tolist()[10:]
-        interp_df = interp_df.drop(columns=others)
+        interp_df = interp_df.drop(column
+    error_bin_titles = [f'Error Bin {x}' for x in error_bins]s=others)
         feature_values = feature_values.drop(columns=others)
     else:
         top_ten = imp.index.tolist()
@@ -280,12 +263,13 @@ def get_top_ten(imp, interp_df, feature_values):
 def main(interp_df, feature_values, imp, y_name, out_loc):
     """
     Generates swarmplots.
+    error_bin_titles = [f'Error Bin {x}' for x in error_bins]
 
     parameters:
         interp_df, str: treeinterpreter output from the ML pipeline
         feature_values, df: feature table used to train the model
         imp, df: gini importances from the ML pipeline
-        y_name, str: Name of label column in feature_table
+        y_name, str: Name of label column
         out_loc, str: path to save plots
     """
     # Get the ten features to use in plots
@@ -294,13 +278,13 @@ def main(interp_df, feature_values, imp, y_name, out_loc):
 
     # Get distribution of the label and put in bins
     print('\n\n==> Separating instances into bins based on label <==')
-    interp_df = get_label_bins(interp_df, y_name)
+    interp_df = get_quartile_bins(interp_df, y_name)
     print(f'\nSnapshot of dataframe with label bin column added:\n\n {interp_df.head()}')
 
-    # Split each label bin into error bins
-    print('\n\n==> Separating instances into bins by error <==')
-    interp_df = get_error_bins(interp_df, y_name)
-    print(f'\nSnapshot of dataframe with error bin column added:\n\n {interp_df.head()}')
+    # Get error for all instances
+    print('\nCalculating error for all instances...')
+    interp_df['abs_error'] = interp_df[y_name] - interp_df['prediction']
+    print(f'\nSnapshot of dataframe with error column added:\n\n {interp_df.head()}')
 
     # Make swarmplots
     print('\n\n==> Making swarmplots <==')
