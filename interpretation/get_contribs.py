@@ -15,7 +15,8 @@ import os
 
 import pandas as pd
 import numpy as np
-from joblib import load
+import joblib
+import pickle
 
 from treeinterpreter import treeinterpreter as ti
 
@@ -38,7 +39,7 @@ def prepData(frame, y_name):
 
     return (interp_df_half, featureNames, X)
 
-def jointContribs(feature_df, test_df, model, y_name, save):
+def jointContribs(feature_df, test_df, /mnt/home/peipeiw/Documents/Pathway_prediction/20180827_all_EC_pathway/Cross_validation/Final_results_RF_setB_SMOTE/Saved_models/model, y_name, save):
     """
     Get joint contribs for training and test set.
 
@@ -98,7 +99,7 @@ def independentContribs(feature_df, test_df, model, y_name, save):
 
 
 def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
-        save):
+        save, model_save):
     """
     Separates training and test instances and generates joint and independent
     local contributions for each instance.
@@ -113,6 +114,7 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
         test_inst, str: path to file containing test instances
         model, str: path to saved model
         save, str: location to save contribution output
+        model_save, str: identifier for whether model was pickled or saved with joblib
     """
     # Read in data
     feature_df = pd.read_csv(feature_matrix, sep=feat_sep, index_col=0,
@@ -125,7 +127,11 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
             feature_df = feature_df.loc[:,features]
 
     # Load model
-    model = load(model)
+    if model_save.lower() in ['pickle', 'pkl', 'p']:
+        with open(model) as f:
+            model = pickle.load(f)
+    elif model_save.lower() in ['joblib', 'j']:
+        model = joblib.load(model)
 
     # Split test and train instances
     with open(test_inst) as f:
@@ -159,6 +165,9 @@ if __name__ == "__main__":
     parser.add_argument('-y_name', help='Name of label column', default='Y')
     parser.add_argument('-save', help='Location to save csv and pickles',
     default='')
+    parser.add_argument('-model_save', help='Name of method used to save the '
+    'model. If pickled, use pickle, pkl, or p. If joblib, use joblib or j',
+    default='joblib')
 
     args = parser.parse_args()
 
@@ -169,4 +178,4 @@ if __name__ == "__main__":
     args.save = os.path.abspath(args.save)
 
     main(args.feature_matrix, args.feat_sep, args.y_name, args.feature_selection,
-    args.test_inst, args.model, args.save)
+    args.test_inst, args.model, args.save, args.model_save)
