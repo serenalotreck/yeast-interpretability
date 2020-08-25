@@ -16,57 +16,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def make_tidy_data(bin_df, features_scaled, y_name):
-    """
-    Reshapes and combines bin_df and features_scaled to be compatible with catplot.
-
-    parameters:
-        bin_df, pandas df: a subset by label ID of interp_df with bin ID's
-        features_scaled, pandas df: scaled feature values
-        y_name, str: Name of label column in feature_table
-
-    returns:
-    """
-    # Get a list of the error bin of all instances
-    error_bin_IDs = bin_df.abs_error_bin.copy()
-    error_bin_list = error_bin_IDs.unique()
-
-    # Drop columns so that bin_df and features_scaled have same col names
-    bin_df = bin_df.drop(columns=[f'{y_name}_bin', 'abs_error',
-                                'abs_error_bin', y_name, 'bias', 'prediction'])
-    features_scaled = features_scaled.drop(columns=[y_name])
-
-    # Stack bin_df
-    bin_df_stacked = pd.DataFrame(bin_df.stack(), columns=['contrib'])
-    bin_df_stacked = bin_df_stacked.rename_axis(('ID', 'feature'))
-    bin_df_stacked = bin_df_stacked.reset_index(level='feature')
-    # Add column for error_bin_ID
-    bin_df_stacked['error_bin_ID'] = np.nan
-    for id in error_bin_list:
-        indices = error_bin_IDs.index[error_bin_IDs == id].tolist()
-        bin_df_stacked.loc[indices,'error_bin_ID'] = id
-    # Make into a multiindex with numerical inner index
-    bin_df_stacked = bin_df_stacked.reset_index()
-    bin_df_stacked['sub_idx'] = bin_df_stacked.groupby('ID').cumcount()
-    bin_df_stacked = bin_df_stacked.set_index(['ID', 'sub_idx'])
-
-    # Stack features_scaled
-    features_scaled_stacked = pd.DataFrame(features_scaled.stack(), columns=['value'])
-    features_scaled_stacked = features_scaled_stacked.rename_axis(('ID',
-                                                                'feature'))
-    features_scaled_stacked = features_scaled_stacked.reset_index(level='feature')
-    # Make into a multiindex
-    features_scaled_stacked = features_scaled_stacked.reset_index()
-    features_scaled_stacked['sub_idx'] = features_scaled_stacked.groupby('ID').cumcount()
-    features_scaled_stacked = features_scaled_stacked.set_index(['ID', 'sub_idx'])
-
-    # Combine over the feature column and outer index
-    plot_df = bin_df_stacked.merge(features_scaled_stacked, left_index=True, right_on=['ID', 'sub_idx'])
-    print(f'\n\nSnapshot of dataframe used for plotting:\n{plot_df.head()}')
-
-    return plot_df
-
-
 def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     """
     Makes one figure with error bin # of subplots.
@@ -81,26 +30,30 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     plot_title = f'label {" ".join(bin_ID.split("_"))}'
     print(f'\n\nPlot being made for {plot_title}')
 
-    # Reshape the data
-    plot_df = make_tidy_data(bin_df, features_scaled, y_name)
+    # Prep bin_df and reshape:
+    bin_df = bin_df.reset_index()
+    bin_df = bin_df.drop(columns=['abs_error', f'{y_name}_bin', 'bias', 'prediction', y_name])
+    bin_df = pd.melt(bin_df, id_vars=['ID', 'abs_error_bin'])
+
+    # Perform inner merge with features_scaled:
+    plot_df = bin_df.merge(features_scaled, how='inner', left_on=['ID', 'variable'], right_on=['ID', 'variable'])
+    plot_df = plot_df.rename(columns={'variable':'feature', 'value_x':'contrib', 'value_y':'feat_value'})
 
     # Get error bin names to use as subplot titles and to format plots
-    error_bins = plot_df.error_bin_ID.unique()
+    error_bins = plot_df.abs_error_bin.unique()
     print(f'error_bins list for plot: {error_bins}')
     if (len(error_bins) % 2) == 0:
         col_wrap_num = 2
     else: col_wrap_num = 1
 
     # Make plot
-    g = plot_df.groupby('feature_x')
-    feat_value = g['value'].mean()
-
+    g = plot_df.groupby('feature')
+    feat_value = g['feat_value'].mean()
     norm = plt.Normalize(feat_value.min(), feat_value.max())
     sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
     sm.set_array([])
-
-    myPlot = sns.catplot(x='feature_x', y='contrib', data=plot_df, kind='swarm',
-                    hue='value', col='error_bin_ID', col_wrap=col_wrap_num,
+    myPlot = sns.catplot(x='feature', y='contrib', data=plot_df, kind='swarm',
+                    hue='feat_value', col='abs_error_bin', col_wrap=col_wrap_num,
                     palette='viridis', legend=False)
     myPlot.set_xticklabels(rotation=45)
     myPlot.set_titles("Error bin: {col_name}")
@@ -109,7 +62,7 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     plt.suptitle(f'Feature Contributions for {plot_title}')
     myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
     # TODO: add label for colorbar
-    # TODO: figure out why the ticks on the colorbars have different numbers in
+    # TODO: figure out why the ticks on the colorbars have different numbeplot_featsrs in
     # different figures
     plt.savefig(f'{out_loc}/{bin_ID}_swarmplot.png')
 
@@ -119,6 +72,7 @@ def make_swarmplots(interp_df, out_loc, feature_values, y_name):
     Makes four matplotlib figures, each with 4 subplots. Each figure
     corresponds to one label bin, and each subplot is for an error bin within
     that label bin.
+
 
     Error bins are calculated here, within each label bin.
 
@@ -130,16 +84,22 @@ def make_swarmplots(interp_df, out_loc, feature_values, y_name):
     """
     # Normalize the feature values between 0 and 1
     features_scaled = feature_values.apply(lambda x: x/x.max())
+    # Prep features_scaled and reshape:
+    features_scaled = features_scaled.reset_index()
+    features_scaled = features_scaled.rename({'index':'ID'})
+    features_scaled = features_scaled.drop(columns=[y_name])
+    features_scaled = pd.melt(features_scaled, id_vars=['ID'])
+
+    print(f'features_scaled: \n\n{features_scaled.head()}')
 
     # Make plots
     bins = interp_df[f'{y_name}_bin'].unique()
     for i, bin in enumerate(bins):
         bin_df = interp_df[interp_df[f'{y_name}_bin'] == bin].copy()
         # Split each label bin into error bins
-        print('\n\n==> Separating instances in label {bin} into bins by error <==')
+        print(f'\n\n==> Separating instances in label {bin} into bins by error <==')
         bin_df = get_quartile_bins(bin_df, 'abs_error')
         print(f'\nSnapshot of dataframe with error bin column added:\n\n {bin_df.head()}')
-        bin_df_idx = bin_df.index.values.tolist()
         make_bin_plot(bin_df, features_scaled, y_name, out_loc)
 
 
@@ -149,7 +109,8 @@ def get_quartile_bins(interp_df, col_name):
 
     parameters:
         interp_df, pandas df: interpretation dataframe.
-            If used for labels, MUST have the column:
+            If used for labels, MUST have the plot_feat
+        error_bin_titles = [f'Error Bin {x}' for x in error_bins]s_dfcolumn:
             | y_name | ...
             If used for error, MUSt have the column
             | abs_error |
@@ -163,6 +124,7 @@ def get_quartile_bins(interp_df, col_name):
                     q2,
                     q3,
                     interp_df[col_name].max()+1]
+
     interp_df[f'{col_name}_bin'] = pd.cut(interp_df[col_name], bins=bins_label,
                                     labels=['first_quartile', 'second_quartile',
                                             'third_quartile', 'fourth_quartile'])
@@ -171,6 +133,8 @@ def get_quartile_bins(interp_df, col_name):
 
 def rename_features(interp_df, feature_values):
     """
+
+        error_bin_titles = [f'Error Bin {x}' for x in error_bins]
     Renames features as feature1... feature10.
 
     parameters:
@@ -181,7 +145,8 @@ def rename_features(interp_df, feature_values):
 
     returns:
         interp_df, pandas df: interpretation dataframe with only top ten
-            features, renamed feature1 to feature10
+            features, renamed feature1 to featplot_feat
+        error_bin_titles = [f'Error Bin {x}' for x in error_bins]s_dfure10
         feature_values, pandas df: feature matrix with only top ten features,
             renamed feature1 to feature10
     """
@@ -234,7 +199,8 @@ def get_top_ten(imp, interp_df, feature_values):
             | y_name | feature1 | ... | featureN
 
     returns:
-        interp_df, pandas df: interpretation dataframe with only top ten
+        interp_df, pandas df: interpretation dataframe
+        error_bin_titles = [f'Error Bin {x}' for x in error_bins]with only top ten
             features, renamed feature1 to feature10
         feature_values, pandas df: feature matrix with only top ten # Split each label bin into error bins
     print('\n\n==> Separating instances into bins by error <==')
@@ -246,8 +212,7 @@ def get_top_ten(imp, interp_df, feature_values):
     if len(imp.mean_imp) > 10:
         top_ten = imp.index.tolist()[:10]
         others = imp.index.tolist()[10:]
-        interp_df = interp_df.drop(column
-    error_bin_titles = [f'Error Bin {x}' for x in error_bins]s=others)
+        interp_df = interp_df.drop(columns=others)
         feature_values = feature_values.drop(columns=others)
     else:
         top_ten = imp.index.tolist()
