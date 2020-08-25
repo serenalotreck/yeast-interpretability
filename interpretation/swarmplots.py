@@ -62,8 +62,6 @@ def make_bin_plot(bin_df, features_scaled, y_name, out_loc):
     plt.suptitle(f'Feature Contributions for {plot_title}')
     myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
     # TODO: add label for colorbar
-    # TODO: figure out why the ticks on the colorbars have different numbeplot_featsrs in
-    # different figures
     plt.savefig(f'{out_loc}/{bin_ID}_swarmplot.png')
 
 
