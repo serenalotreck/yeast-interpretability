@@ -39,7 +39,7 @@ def prepData(frame, y_name):
 
     return (interp_df_half, featureNames, X)
 
-def jointContribs(feature_df, test_df, /mnt/home/peipeiw/Documents/Pathway_prediction/20180827_all_EC_pathway/Cross_validation/Final_results_RF_setB_SMOTE/Saved_models/model, y_name, save):
+def jointContribs(feature_df, test_df, model, y_name, save):
     """
     Get joint contribs for training and test set.
 
