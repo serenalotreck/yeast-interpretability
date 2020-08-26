@@ -39,7 +39,7 @@ def prepData(frame, y_name):
 
     return (interp_df_half, featureNames, X)
 
-def jointContribs(feature_df, test_df, /mnt/home/peipeiw/Documents/Pathway_prediction/20180827_all_EC_pathway/Cross_validation/Final_results_RF_setB_SMOTE/Saved_models/model, y_name, save):
+def jointContribs(feature_df, test_df, model, y_name, save, save_name):
     """
     Get joint contribs for training and test set.
 
@@ -59,15 +59,15 @@ def jointContribs(feature_df, test_df, /mnt/home/peipeiw/Documents/Pathway_predi
         df_idx = frame.index
         pred_bias_df = pd.DataFrame({'prediction':prediction, 'bias':bias},
                                     index=df_idx)
-        pred_bias_df.to_csv(f'{save}/{set}_joint_bias_and_prediction.csv')
+        pred_bias_df.to_csv(f'{save}/{save_name}_{set}_joint_bias_and_prediction.csv')
         print('Joint bias and prediction saved! \nSnapshot of saved file:\n '
         f'{pred_bias_df.head()}')
 
         # Save contributions as .npy binary file
-        np.save(f'{save}/{set}_joint_contributions.npy', contributions)
+        np.save(f'{save}/{save_name}_{set}_joint_contributions.npy', contributions)
         print(f'Joint contributions for {set} saved!')
 
-def independentContribs(feature_df, test_df, model, y_name, save):
+def independentContribs(feature_df, test_df, model, y_name, save, save_name):
     """
     Get independent contribs for taining and test set.
 
@@ -92,14 +92,14 @@ def independentContribs(feature_df, test_df, model, y_name, save):
         # Make df where columns are ID, label, bias, prediction, contributions
         local_interp_df = pd.concat([interp_df_half, contrib_df], axis=1)
 
-        local_interp_df.to_csv(f'{save}/{set}_independent_contribs.csv')
+        local_interp_df.to_csv(f'{save}/{save_name}_{set}_independent_contribs.csv')
 
         print(f'Independent contributions for {set} saved!')
         print(f'Snapshot of saved file:\n{local_interp_df.iloc[:5,:5]}')
 
 
 def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
-        save, model_save):
+        save, save_name, model_save):
     """
     Separates training and test instances and generates joint and independent
     local contributions for each instance.
@@ -114,6 +114,7 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
         test_inst, str: path to file containing test instances
         model, str: path to saved model
         save, str: location to save contribution output
+        save_name, str: prefix for saving files
         model_save, str: identifier for whether model was pickled or saved with joblib
     """
     # Read in data
@@ -125,13 +126,15 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
             features = f.read().strip().splitlines()
             features = [y_name] + features
             feature_df = feature_df.loc[:,features]
+    args.feature_selection = os.path.abspath(args.feature_selection)
 
     # Load model
     if model_save.lower() in ['pickle', 'pkl', 'p']:
         with open(model) as f:
             model = pickle.load(f)
     elif model_save.lower() in ['joblib', 'j']:
-        model = joblib.load(model)
+        model = joblib.load(model)    args.feature_selection = os.path.abspath(args.feature_selection)
+
 
     # Split test and train instances
     with open(test_inst) as f:
@@ -146,9 +149,9 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
 
     # Interpret results
     print('==> Calculating independent contributions <==')
-    independentContribs(feature_df, test_df, model, y_name, save)
+    independentContribs(feature_df, test_df, model, y_name, save, save_name)
     print('\n\n==> Calculating joint contributions <==')
-    jointContribs(feature_df, test_df, model, y_name, save)
+    jointContribs(feature_df, test_df, model, y_name, save, save_name)
 
 
 if __name__ == "__main__":
@@ -165,6 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('-y_name', help='Name of label column', default='Y')
     parser.add_argument('-save', help='Location to save csv and pickles',
     default='')
+    parser.add_argument('-save_name', help='prefix for saved files', default='')
     parser.add_argument('-model_save', help='Name of method used to save the '
     'model. If pickled, use pickle, pkl, or p. If joblib, use joblib or j',
     default='joblib')
@@ -177,5 +181,6 @@ if __name__ == "__main__":
     args.feature_selection = os.path.abspath(args.feature_selection)
     args.save = os.path.abspath(args.save)
 
+
     main(args.feature_matrix, args.feat_sep, args.y_name, args.feature_selection,
-    args.test_inst, args.model, args.save, args.model_save)
+    args.test_inst, args.model, args.save, args.save_name, args.model_save)
