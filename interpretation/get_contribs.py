@@ -39,11 +39,8 @@ def prepData(frame, y_name):
 
     return (interp_df_half, featureNames, X)
 
-<<<<<<< HEAD
+
 def jointContribs(feature_df, test_df, model, y_name, save, save_name):
-=======
-def jointContribs(feature_df, test_df, model, y_name, save):
->>>>>>> dff2c75fad29c58eee38ddd6c99d5ce5773b7c92
     """
     Get joint contribs for training and test set.
 
