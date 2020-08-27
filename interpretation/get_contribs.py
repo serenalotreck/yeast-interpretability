@@ -1,12 +1,9 @@
 """
 Script to load saved model and get joint and independent contributions for a
-saved ML model.
+saved tree-based model.
 
 Writes independent contributions out as a csv, and exports joint contributions
 as a pickle.
-
-TODO: see if independent contrib output is still 2D for classifiers, make
-pickle save option if not
 
 Author: Serena G. Lotreck
 """
@@ -15,9 +12,11 @@ import os
 
 import pandas as pd
 import numpy as np
-from joblib import load
+import joblib
+import pickle
 
 from treeinterpreter import treeinterpreter as ti
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 def prepData(frame, y_name):
     """
@@ -31,42 +30,112 @@ def prepData(frame, y_name):
 
 	# Get feature names to use as col names for contributions
     featureNames = frame.columns.values.tolist()
-    featureNames = featureNames[1:]
+    featureNames.remove(y_name)
 
 	# Drop Y to format test data for ti
     X = frame.drop([y_name], axis=1)
 
     return (interp_df_half, featureNames, X)
 
-def jointContribs(feature_df, test_df, model, y_name, save):
+# TODO: incorporate classification for joint contribs and add back in
+# def jointContribs(feature_df, test_df, model, y_name, save, save_name):
+#     """
+#     Get joint contribs for training and test set.
+#
+#     Saves predictions and biases in a csv, and uses np.save to save
+#     contributions. No feature names or instance ID's are saved for contribs.
+#     """
+#     for frame, set in zip([feature_df, test_df], ['training', 'test']):
+#         # Prep data for ti
+#         interp_df_half, featureNames, X = prepData(frame, y_name)
+#
+#         # Call ti
+#         prediction, bias, contributions = ti.predict(model, X, joint_contribution=True)
+#         prediction = prediction.squeeze()
+#
+#         # Make and save df for predictions and bias that has instance ID
+#         # as the index
+#         df_idx = frame.index
+#         pred_bias_df = pd.DataFrame({'prediction':prediction, 'bias':bias},
+#                                     index=df_idx)
+#         pred_bias_df.to_csv(f'{save}/{save_name}_{set}_joint_bias_and_prediction.csv')
+#         print('Joint bias and prediction saved! \nSnapshot of saved file:\n '
+#         f'{pred_bias_df.head()}')
+#
+#         # Save contributions as .npy binary file
+#         np.save(f'{save}/{save_name}_{set}_joint_contributions.npy', contributions)
+#         print(f'Joint contributions for {set} saved!')
+
+
+def deconvolute_reg_contribs(interp_df_half, bias, prediction, contributions,
+                            frame, featureNames, save, save_name, set):
     """
-    Get joint contribs for training and test set.
-
-    Saves predictions and biases in a csv, and uses np.save to save
-    contributions. No feature names or instance ID's are saved for contribs.
+    Mkae a dataframe for treeinterpreter output.
     """
-    for frame, set in zip([feature_df, test_df], ['training', 'test']):
-        # Prep data for ti
-        interp_df_half, featureNames, X = prepData(frame, y_name)
+    # Add results to contribution df
+    interp_df_half['bias'] = bias.tolist()
+    interp_df_half['prediction'] = prediction.flatten().tolist()
 
-        # Call ti
-        prediction, bias, contributions = ti.predict(model, X, joint_contribution=True)
-        prediction = prediction.squeeze()
+    # Make df of contributions
+    contrib_df = pd.DataFrame(contributions, index = frame.index,
+    					columns=featureNames)
 
-        # Make and save df for predictions and bias that has instance ID
-        # as the index
-        df_idx = frame.index
-        pred_bias_df = pd.DataFrame({'prediction':prediction, 'bias':bias},
-                                    index=df_idx)
-        pred_bias_df.to_csv(f'{save}/{set}_joint_bias_and_prediction.csv')
-        print('Joint bias and prediction saved! \nSnapshot of saved file:\n '
-        f'{pred_bias_df.head()}')
+    # Make df where columns are ID, label, bias, prediction, contributions
+    local_interp_df = pd.concat([interp_df_half, contrib_df], axis=1)
 
-        # Save contributions as .npy binary file
-        np.save(f'{save}/{set}_joint_contributions.npy', contributions)
-        print(f'Joint contributions for {set} saved!')
+    local_interp_df.to_csv(f'{save}/{save_name}_{set}_reg_independent_contribs.csv')
 
-def independentContribs(feature_df, test_df, model, y_name, save):
+    print(f'\nIndependent contributions for {set} saved!')
+    print(f'\nSnapshot of saved file:\n{local_interp_df.iloc[:5,:5]}')
+
+
+def deconvolute_clf_contribs(model, interp_df_half, featureNames, bias,
+                            prediction, contributions, save, save_name, set):
+    """
+    Make a dataframe for each class from the output of treeinterpreter.
+    """
+    classes = [f'class_{i}' for i in range(model.n_classes_)]
+
+    prediction_df = pd.DataFrame(prediction, columns=classes)
+    bias_df = pd.DataFrame(bias, columns=classes)
+
+    class_dfs = {}
+    for name in range(model.n_classes_):
+        # Initialize a dataframe for the class containing ID, true class, bias and predictions
+        class_df = pd.DataFrame({'bias':bias_df[f'class_{name}'],
+                                'class_proba_prediction':prediction_df[f'class_{name}']})
+        class_df = class_df.set_index(interp_df_half.index)
+        class_df = pd.concat([interp_df_half, class_df], axis=1)
+
+        # Make a contribution dataframe for each class
+        contrib_df = 0
+        contrib_rows = []
+        for ix in range(contributions.shape[0]):
+            if ix == 0:
+                inst_df = pd.DataFrame(contributions[ix],
+                                        index=featureNames,
+                                        columns=classes)
+                contrib_df = inst_df[f'class_{name}'].to_frame().T
+            else:
+                inst_df = pd.DataFrame(contributions[ix],
+                                        index=featureNames,
+                                        columns=classes)
+                contrib_rows.append(inst_df[f'class_{name}'].to_frame().T)
+
+        # Combine contributions for all instances into a dataframe
+        contrib_df = pd.concat([contrib_df]+contrib_rows, ignore_index=True)
+        contrib_df = contrib_df.set_index(class_df.index)
+
+        # Add to the overall class dataframe
+        class_df = pd.concat([class_df, contrib_df], axis=1)
+
+        # Save class dataframe
+        class_df.to_csv(f'{save}/{save_name}_{set}_clf_independent_contribs.csv')
+        print(f'\nIndependent contributions for {set} class {name} saved!')
+        print(f'\nSnapshot of saved file:\n{class_df.iloc[:5,:5]}')
+
+
+def independentContribs(feature_df, test_df, model, y_name, save, save_name):
     """
     Get independent contribs for taining and test set.
 
@@ -80,25 +149,16 @@ def independentContribs(feature_df, test_df, model, y_name, save):
         # Call ti
         prediction, bias, contributions = ti.predict(model, X)
 
-        # Add results to contribution df
-        interp_df_half['bias'] = bias.tolist()
-        interp_df_half['prediction'] = prediction.flatten().tolist()
+        if isinstance(model, RandomForestClassifier):
+            deconvolute_clf_contribs(model, interp_df_half, featureNames, bias,
+                                        prediction, contributions, save, save_name, set)
 
-        # Make df of contributions
-        contrib_df = pd.DataFrame(contributions, index = frame.index,
-        					columns=featureNames)
-
-        # Make df where columns are ID, label, bias, prediction, contributions
-        local_interp_df = pd.concat([interp_df_half, contrib_df], axis=1)
-
-        local_interp_df.to_csv(f'{save}/{set}_independent_contribs.csv')
-
-        print(f'Independent contributions for {set} saved!')
-        print(f'Snapshot of saved file:\n{local_interp_df.iloc[:5,:5]}')
-
+        elif isinstance(model, RandomForestRegressor):
+            deconvolute_reg_contribs(interp_df_half, bias, prediction, contributions,
+                                        frame, featureNames, save, save_name, set)
 
 def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
-        save):
+        save, save_name, model_save):
     """
     Separates training and test instances and generates joint and independent
     local contributions for each instance.
@@ -113,6 +173,8 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
         test_inst, str: path to file containing test instances
         model, str: path to saved model
         save, str: location to save contribution output
+        save_name, str: prefix for saving files
+        model_save, str: identifier for whether model was pickled or saved with joblib
     """
     # Read in data
     feature_df = pd.read_csv(feature_matrix, sep=feat_sep, index_col=0,
@@ -123,9 +185,15 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
             features = f.read().strip().splitlines()
             features = [y_name] + features
             feature_df = feature_df.loc[:,features]
+    args.feature_selection = os.path.abspath(args.feature_selection)
 
     # Load model
-    model = load(model)
+    if model_save.lower() in ['pickle', 'pkl', 'p']:
+        with open(model) as f:
+            model = pickle.load(f)
+    elif model_save.lower() in ['joblib', 'j']:
+        model = joblib.load(model)
+
 
     # Split test and train instances
     with open(test_inst) as f:
@@ -139,10 +207,10 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
         feature_df = feature_df.drop(test_instances)
 
     # Interpret results
-    print('==> Calculating independent contributions <==')
-    independentContribs(feature_df, test_df, model, y_name, save)
-    print('\n\n==> Calculating joint contributions <==')
-    jointContribs(feature_df, test_df, model, y_name, save)
+    print('\n\n==> Calculating independent contributions <==')
+    independentContribs(feature_df, test_df, model, y_name, save, save_name)
+    # print('\n\n==> Calculating joint contributions <==')
+    # jointContribs(feature_df, test_df, model, y_name, save, save_name)
 
 
 if __name__ == "__main__":
@@ -159,6 +227,10 @@ if __name__ == "__main__":
     parser.add_argument('-y_name', help='Name of label column', default='Y')
     parser.add_argument('-save', help='Location to save csv and pickles',
     default='')
+    parser.add_argument('-save_name', help='prefix for saved files', default='')
+    parser.add_argument('-model_save', help='Name of method used to save the '
+    'model. If pickled, use pickle, pkl, or p. If joblib, use joblib or j',
+    default='joblib')
 
     args = parser.parse_args()
 
@@ -168,5 +240,6 @@ if __name__ == "__main__":
     args.feature_selection = os.path.abspath(args.feature_selection)
     args.save = os.path.abspath(args.save)
 
+
     main(args.feature_matrix, args.feat_sep, args.y_name, args.feature_selection,
-    args.test_inst, args.model, args.save)
+    args.test_inst, args.model, args.save, args.save_name, args.model_save)

@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from pandas._testing import assert_frame_equal
 from pandas.testing import assert_series_equal
-import mispredictions as mp
 
 class TestTopTen(unittest.TestCase):
     """
@@ -82,7 +81,7 @@ class TestTopTen(unittest.TestCase):
         gini_true = ['feature1','feature2','feature3','feature4','feature5',
                     'feature6','feature7','feature8','feature9','feature10']
 
-        gini, interp_result, feature_result = get_top_ten(imp, interp_df,
+        interp_result, feature_result = get_top_ten(imp, interp_df,
                                                             feature_values)
         self.assertEqual(gini, gini_true)
         assert_frame_equal(interp_result, interp_df)
@@ -124,7 +123,7 @@ class TestTopTen(unittest.TestCase):
         gini_true = ['feature1','feature2','feature3','feature4','feature5',
                     'feature6','feature7','feature8','feature9','feature10']
 
-        gini, interp_result, feature_result = get_top_ten(imp, interp_df,
+        interp_result, feature_result = get_top_ten(imp, interp_df,
                                                             feature_values)
         # Expected results
         interp_df.drop(columns=['feature11'], inplace=True)
@@ -134,117 +133,98 @@ class TestTopTen(unittest.TestCase):
         assert_frame_equal(interp_result, interp_df)
         assert_frame_equal(feature_result, feature_values)
 
-class TestPercentError(unittest.TestCase):
-    def test_mp_calculate_error(self):
+class TestAbsError(unittest.TestCase):
+    def test_abs_error(self):
         pred = [-3, -0.01, 0.5, 2]
         true = [-2, 4, 0.6, 17]
         df = pd.DataFrame({'pred':pred, 'true':true})
         # Function answer
-        df['percent_error'] = mp.calculate_error(df['pred'], df['true'])
+        df['abs_error'] = df['true'] - df['pred']
 
         # True answer
-        percent_error = []
+        abs_error = []
         for pr, tr in zip(pred, true):
-            error = abs((pr-tr)/tr)*100
-            percent_error.append(error)
+            error = tr-pr
+            abs_error.append(error)
         df_right_answer = pd.DataFrame({'pred':pred, 'true':true,
-                                        'percent_error':percent_error})
+                                        'abs_error':abs_error})
 
         assert_frame_equal(df_right_answer, df)
 
 
 
 class TestGetBins(unittest.TestCase):
-    def test_get_bins_with_all_bins(self):
+    def test_get_bins_with_quartiles(self):
         vals = np.array([-7,-2,-1,0,0,0,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,4,5,5,6,8])
         vals_df = pd.DataFrame(vals,columns=['col_of_interest'])
         vals_df['random'] = np.random.randint(0, 20, vals_df.shape[0])
         vals_df['stuff'] = np.random.randint(-20, 20, vals_df.shape[0])
 
-        binned_df = get_bins(vals_df, 'col_of_interest')
+        binned_df = get_bins(vals_df, 'col_of_interest', bin_num=4)
 
         # The right answers
         # Bin0
-        idx_bin0 = binned_df.index[binned_df['col_of_interest'] == -7]
+        idx_bin0 = binned_df.index[binned_df['col_of_interest'] <= 1]
         print(f'idx_bin0: \n{idx_bin0}')
         bin0_val = list(binned_df.loc[idx_bin0, 'col_of_interest_bin_ID'])
 
         self.assertEqual(bin0_val, ['col_of_interest_bin0'])
 
         # Bin1
-        idx_bin1 = binned_df.index[(binned_df['col_of_interest'] == -1) |
-                                    (binned_df['col_of_interest'] == -2)]
+        idx_bin1 = binned_df.index[(binned_df['col_of_interest'] == 1) |
+                                    (binned_df['col_of_interest'] == 2)]
         bin1_vals = binned_df.loc[idx_bin1, 'col_of_interest_bin_ID']
         bin1_vals = list(bin1_vals.unique())
 
         self.assertEqual(bin1_vals, ['col_of_interest_bin1'])
 
         # Bin2
-        idx_bin2 = binned_df.index[(binned_df['col_of_interest'] == 0) |
-                                    (binned_df['col_of_interest'] == 1)]
+        idx_bin2 = binned_df.index[(binned_df['col_of_interest'] == 3)]
         bin2_vals = binned_df.loc[idx_bin2, 'col_of_interest_bin_ID']
         bin2_vals = list(bin2_vals.unique())
 
         self.assertEqual(bin2_vals, ['col_of_interest_bin2'])
 
         # Bin3
-        idx_bin3 = binned_df.index[(binned_df['col_of_interest'] == 2) |
-                                    (binned_df['col_of_interest'] == 3)|
-                                    (binned_df['col_of_interest'] == 4)]
+        idx_bin3 = binned_df.index[(binned_df['col_of_interest'] == 4) |
+                                    (binned_df['col_of_interest'] == 5) |
+                                    (binned_df['col_of_interest'] == 6) |
+                                    (binned_df['col_of_interest'] == 8)]
         bin3_vals = binned_df.loc[idx_bin3, 'col_of_interest_bin_ID']
         bin3_vals = list(bin3_vals.unique())
 
         self.assertEqual(bin3_vals, ['col_of_interest_bin3'])
 
-        # Bin4
-        idx_bin4 = binned_df.index[(binned_df['col_of_interest'] == 5) |
-                                    (binned_df['col_of_interest'] == 6)]
-        bin4_vals = binned_df.loc[idx_bin4, 'col_of_interest_bin_ID']
-        bin4_vals = list(bin4_vals.unique())
 
-        self.assertEqual(bin4_vals, ['col_of_interest_bin4'])
-
-        # Bin5
-        idx_bin5 = binned_df.index[binned_df['col_of_interest'] == 8]
-        bin5_val = list(binned_df.loc[idx_bin5, 'col_of_interest_bin_ID'])
-
-        self.assertEqual(bin5_val, ['col_of_interest_bin5'])
-
-
-    def test_get_bins_with_empty_bins_0_and_5(self):
+    def test_get_bins_with_three_bins(self):
         vals = np.array([-3,1,2,3,6])
         vals_df = pd.DataFrame(vals,columns=['col_of_interest'])
         vals_df['random'] = np.random.randint(0, 20, vals_df.shape[0])
         vals_df['stuff'] = np.random.randint(-20, 20, vals_df.shape[0])
 
-        binned_df = get_bins(vals_df, 'col_of_interest')
+        binned_df = get_bins(vals_df, 'col_of_interest', bin_num=3)
 
         # The right answers
+        # Bin0
+        idx_bin0 = binned_df.index[binned_df['col_of_interest'] == -3]
+        bin0_val = list(binned_df.loc[idx_bin0, 'col_of_interest_bin_ID'])
+
+        self.assertEqual(bin0_val, ['col_of_interest_bin0'])
+
         # Bin1
-        idx_bin1 = binned_df.index[binned_df['col_of_interest'] == -3]
+        idx_bin1 = binned_df.index[(binned_df['col_of_interest'] == 1) |
+                                    (binned_df['col_of_interest'] == 2) |
+                                    (binned_df['col_of_interest'] == 3)]
         bin1_val = list(binned_df.loc[idx_bin1, 'col_of_interest_bin_ID'])
 
         self.assertEqual(bin1_val, ['col_of_interest_bin1'])
 
         # Bin2
-        idx_bin2 = binned_df.index[binned_df['col_of_interest'] == 1]
-        bin2_val = list(binned_df.loc[idx_bin2, 'col_of_interest_bin_ID'])
+        idx_bin2 = binned_df.index[binned_df['col_of_interest'] == 6]
+        bin2_vals = binned_df.loc[idx_bin2, 'col_of_interest_bin_ID']
+        bin2_vals = list(bin2_vals.unique())
 
-        self.assertEqual(bin2_val, ['col_of_interest_bin2'])
-
-        # Bin3
-        idx_bin3 = binned_df.index[(binned_df['col_of_interest'] == 2) |
-                                    (binned_df['col_of_interest'] == 3)]
-        bin3_vals = binned_df.loc[idx_bin3, 'col_of_interest_bin_ID']
-        bin3_vals = list(bin3_vals.unique())
-
-        self.assertEqual(bin3_vals, ['col_of_interest_bin3'])
-
-        # Bin4
-        idx_bin4 = binned_df.index[binned_df['col_of_interest'] == 6]
-        bin4_val = list(binned_df.loc[idx_bin4, 'col_of_interest_bin_ID'])
-
-        self.assertEqual(bin4_val, ['col_of_interest_bin4'])
+        self.assertEqual(bin2_vals, ['col_of_interest_bin2'])
 
 
 class TestTidyFormatting(unittest.TestCase):
@@ -258,8 +238,8 @@ class TestTidyFormatting(unittest.TestCase):
         self.interp_df = pd.DataFrame({'Y':[0,1],'bias':[0.5,0.5],
                                     'prediction':[0,1],'f_1':[12,13],
                                     'f_2':[14,15], 'Y_bin_ID':['bin1','bin1'],
-                                    'percent_error':[0,0],
-                                    'percent_error_bin_ID':['bin1','bin2']},
+                                    'abs_error':[0,0],
+                                    'abs_error_bin_ID':['bin1','bin2']},
                                      index=interp_index)
 
         single_index = pd.Index([0,0,1,1], name='ID')
