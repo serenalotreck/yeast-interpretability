@@ -130,7 +130,7 @@ def deconvolute_clf_contribs(model, interp_df_half, featureNames, bias,
         class_df = pd.concat([class_df, contrib_df], axis=1)
 
         # Save class dataframe
-        class_df.to_csv(f'{save}/{save_name}_{set}_clf_independent_contribs.csv')
+        class_df.to_csv(f'{save}/{save_name}_{set}_clf_class_{name}_independent_contribs.csv')
         print(f'\nIndependent contributions for {set} class {name} saved!')
         print(f'\nSnapshot of saved file:\n{class_df.iloc[:5,:5]}')
 
