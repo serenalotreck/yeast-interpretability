@@ -1,7 +1,0 @@
-### Directories ###
-__pycache__/
-auto-mpg_data/
-
-### Datafiles ###
-*.csv
-*.txt

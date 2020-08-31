@@ -193,8 +193,7 @@ def main(feature_matrix, feat_sep, y_name, feature_selection, test_inst, model,
             model = pickle.load(f)
     elif model_save.lower() in ['joblib', 'j']:
         model = joblib.load(model)
-
-
+    
     # Split test and train instances
     with open(test_inst) as f:
         test_instances = f.read().splitlines()
