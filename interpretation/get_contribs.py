@@ -150,7 +150,7 @@ def independentContribs(feature_df, test_df, model, y_name, save, save_name):
         prediction, bias, contributions = ti.predict(model, X)
 
         if isinstance(model, RandomForestClassifier):
-            deconvolute_clf_contribs(model, interp_df_half, featureNames, bias,
+            class_df = deconvolute_clf_contribs(model, interp_df_half, featureNames, bias,
                                         prediction, contributions, save, save_name, set)
 
         elif isinstance(model, RandomForestRegressor):
