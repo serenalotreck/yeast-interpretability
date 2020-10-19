@@ -294,7 +294,7 @@ if __name__ == "__main__":
     if os.path.isfile(args.feature_selection):
         with open(args.feature_selection) as f:
             features = f.read().strip().splitlines()
-            features = [y_name] + features
+            features = [args.y_name] + features
             print(f'first five of features list: {features[:5]}')
             feature_values = feature_values[features]  # Chooses only the features used to train the model
 
