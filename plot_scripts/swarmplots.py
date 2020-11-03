@@ -10,20 +10,19 @@ import os
 import mispredictions as mp
 import pandas as pd
 import numpy as np
-from sklearn import preprocessing
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def make_bin_plot(plot_df, plot_title, features_scaled, y_name, out_loc):
+def make_plot(plot_df, plot_title, out_loc):
     """
     Makes one figure with error bin # of subplots.
 
     parameters:
-        bin_df, pandas df: a subset by label ID of interp_df with bin ID's
-        features_scaled, pandas df: scaled feature values
-        y_name, str: Name of label column in feature_table
+        plot_df, pandas df: a subset by label ID of interp_df with bin ID's
+        plot_title, str: name for this plot
+        out_loc, str: place to save the plot
     """
     print(f'\n\nPlot being made for {plot_title}')
 
@@ -52,4 +51,30 @@ def make_bin_plot(plot_df, plot_title, features_scaled, y_name, out_loc):
     # TODO: add label for colorbar
     plt.savefig(f'{out_loc}/{bin_ID}_swarmplot.png')
 
-    ## TODO: add command line arguments, streamline with format_plot_data.py
+
+def main(plot_df_path, plot_title, out_loc):
+    """
+    Reads in data and passes to make_bin_plot.
+    """
+    # Get absolute paths
+    plot_df_path = os.path.abspath(plot_df_path)
+    out_loc = os.path.abspath(out_loc)
+
+    # Read in data
+    plot_df = pd.read_csv(plot_df_path, index_col=0)
+
+    # Make plots
+    make_plot(plot_df, plot_title, out_loc)
+
+
+if __name__ == "__main__":
+    parser.argparse.ArgumentParser(description='Swarmplots from feature contributions')
+
+    parser.add_argument('plot_df', type=str, help='Path to formatted plot data '
+                        'output from format_plot_data.py')
+    parser.add_argument('plot_title', type=str, help='Name of plot')
+    parser.add_argument('out_loc', type=str, help='Path to directory for output')
+
+    args = parser.parse_args()
+
+    main(args.plot_df, args.plot_title, args.out_loc)
