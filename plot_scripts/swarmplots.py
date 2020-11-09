@@ -40,7 +40,8 @@ def make_plot(plot_df, plot_title, out_loc):
     sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
     sm.set_array([])
     myPlot = sns.catplot(x='feature', y='contrib', data=plot_df, kind='swarm',
-                    hue='feat_value', col='abs_error_bin', col_wrap=col_wrap_num,
+                    hue='feat_value', col='abs_error_bin', sharey=True,
+                    col_wrap=col_wrap_num,
                     palette='viridis', legend=False)
     myPlot.set_xticklabels(rotation=45)
     myPlot.set_titles("Error bin: {col_name}")
