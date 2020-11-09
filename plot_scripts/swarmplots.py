@@ -7,7 +7,6 @@ http://savvastjortjoglou.com/intrepretable-machine-learning-nfl-combine
 import argparse
 import os
 
-import mispredictions as mp
 import pandas as pd
 import numpy as np
 
@@ -24,7 +23,7 @@ def make_plot(plot_df, plot_title, out_loc):
         plot_title, str: name for this plot
         out_loc, str: place to save the plot
     """
-    print(f'\n\nPlot being made for {plot_title}')
+    print(f'\n\nPlot being made for {plot_title.replace("_", " ")}')
 
     # Get error bin names to use as subplot titles and to format plots
     error_bins = plot_df.abs_error_bin.unique()
@@ -47,15 +46,15 @@ def make_plot(plot_df, plot_title, out_loc):
     myPlot.set_titles("Error bin: {col_name}")
     myPlot.set_axis_labels(x_var='Feature', y_var='Contribution')
     plt.tight_layout(rect=[0,0,1,0.95])
-    plt.suptitle(f'Feature Contributions for {plot_title}')
+    plt.suptitle(f'Feature Contributions for {plot_title.replace("_", " ")}')
     myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
     # TODO: add label for colorbar
-    plt.savefig(f'{out_loc}/{bin_ID}_swarmplot.png')
+    plt.savefig(f'{out_loc}/{plot_title}_swarmplot.png')
 
 
 def main(plot_df_path, plot_title, out_loc):
     """
-    Reads in data and passes to make_bin_plot.
+    Reads in data and passes to make_plot.
     """
     # Get absolute paths
     plot_df_path = os.path.abspath(plot_df_path)
@@ -69,11 +68,12 @@ def main(plot_df_path, plot_title, out_loc):
 
 
 if __name__ == "__main__":
-    parser.argparse.ArgumentParser(description='Swarmplots from feature contributions')
+    parser = argparse.ArgumentParser(description='Swarmplots from feature contributions')
 
     parser.add_argument('plot_df', type=str, help='Path to formatted plot data '
                         'output from format_plot_data.py')
-    parser.add_argument('plot_title', type=str, help='Name of plot')
+    parser.add_argument('plot_title', type=str, help='Name of plot, words separated '
+			'by underscores')
     parser.add_argument('out_loc', type=str, help='Path to directory for output')
 
     args = parser.parse_args()

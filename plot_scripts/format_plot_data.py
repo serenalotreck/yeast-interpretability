@@ -6,7 +6,6 @@ Author: Serena G. Lotreck
 import argparse
 import os
 
-import mispredictions as mp
 import pandas as pd
 import numpy as np
 from sklearn import preprocessing
@@ -46,7 +45,7 @@ def make_tidy_data(interp_df, out_loc, feature_values, y_name):
 
         # Get bin ID to use as save name and later as the plot title
         bin_ID = bin_df[f'{y_name}_bin'].unique()[0]
-        plot_title = f'label {" ".join(bin_ID.split("_"))}'
+        plot_title = f'label_{"_".join(bin_ID.split())}'
 
         # Prep bin_df and reshape:
         bin_df = bin_df.reset_index()
