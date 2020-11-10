@@ -45,7 +45,7 @@ This script:
 * Puts contribution and feature value data into tidy format to be used downstream with plotting scripts
 * Normalizes the feature values between 0 and 1
 * Saves a file with the max and min contribution values for use downstream.
-* Saves a file with the absolute min and max feature contributions across all quartiles to use as input arguments to `swarmplots.py`
+* Saves a file with the absolute min and max feature contributions across all quartiles to use as input arguments to `swarmplots.py` <br>
 **NOTE:** A separate dataframe is made for each of the four quartiles of the label. In the auto-mpg example, it would separate the `mpg` into four quartiles and a separate file would be saved for each.
 
 #### Example Usage
