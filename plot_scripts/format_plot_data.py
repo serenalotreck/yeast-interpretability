@@ -223,22 +223,21 @@ def main(interp_df, feature_values, imp, y_name, out_loc):
     print('\n\n==> Getting top ten most important features <==')
     interp_df, feature_values = get_top_ten(imp, interp_df, feature_values)
 
-    if plot_type == 'plain_swarm':
-        # Get distribution of the label and put in bins
-        print('\n\n==> Separating instances into bins based on label <==')
-        interp_df = get_quartile_bins(interp_df, y_name)
-        print(f'\nSnapshot of dataframe with label bin column added:\n\n {interp_df.head()}')
+    # Get distribution of the label and put in bins
+    print('\n\n==> Separating instances into bins based on label <==')
+    interp_df = get_quartile_bins(interp_df, y_name)
+    print(f'\nSnapshot of dataframe with label bin column added:\n\n {interp_df.head()}')
 
-        # Get error for all instances
-        print('\nCalculating error for all instances...')
-        interp_df['abs_error'] = interp_df[y_name] - interp_df['prediction']
-        print(f'\nSnapshot of dataframe with error column added:\n\n {interp_df.head()}')
+    # Get error for all instances
+    print('\nCalculating error for all instances...')
+    interp_df['abs_error'] = interp_df[y_name] - interp_df['prediction']
+    print(f'\nSnapshot of dataframe with error column added:\n\n {interp_df.head()}')
 
-        # Make swarmplots
-        print('\n\n==> Formatting data <==')
-        make_tidy_data(interp_df, out_loc,
-                       feature_values, y_name)
-        print('\nDone!')
+    # Make swarmplots
+    print('\n\n==> Formatting data <==')
+    make_tidy_data(interp_df, out_loc,
+                   feature_values, y_name)
+    print('\nDone!')
         
 
 if __name__ == "__main__":
@@ -279,7 +278,7 @@ if __name__ == "__main__":
     if os.path.isfile(args.feature_selection):
         with open(args.feature_selection) as f:
             features = f.read().strip().splitlines()
-            features = [y_name] + features
+            features = [args.y_name] + features
             print(f'first five of features list: {features[:5]}')
             feature_values = feature_values[features]  # Chooses only the features used to train the model
 
