@@ -9,50 +9,72 @@ import os
 
 import pandas as pd
 import numpy as np
+import re
 
 import matplotlib.pyplot as plt
+import matplotlib.colors
+import matplotlib.colorbar
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
 
 
-def make_plot(plot_df, plot_title, out_loc):
+def make_plot(plot_data, plot_title, y_min, y_max, out_loc):
     """
-    Makes one figure with error bin # of subplots.
+    Makes and saves one figure.
 
     parameters:
-        plot_df, pandas df: a subset by label ID of interp_df with bin ID's
+        plot_data, pandas df: data for one error quartile
         plot_title, str: name for this plot
+        y_min, float: minimum value for y axis
+        y_max, float: maximum value for y axis
         out_loc, str: place to save the plot
+
+    returns: None
     """
-    print(f'\n\nPlot being made for {plot_title.replace("_", " ")}')
+    print(f'\n\nPlot being made for {plot_title}')
 
-    # Get error bin names to use as subplot titles and to format plots
-    error_bins = plot_df.abs_error_bin.unique()
-    print(f'error_bins list for plot: {error_bins}')
-    if (len(error_bins) % 2) == 0:
-        col_wrap_num = 2
-    else: col_wrap_num = 1
+    # Set up axes
+    fig, ax = plt.subplots()
+    ax.set_ylim(y_min, y_max)
 
-    # Make plot
-    g = plot_df.groupby('feature')
-    feat_value = g['feat_value'].mean()
-    norm = plt.Normalize(feat_value.min(), feat_value.max())
-    sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
-    sm.set_array([])
-    myPlot = sns.catplot(x='feature', y='contrib', data=plot_df, kind='swarm',
-                    hue='feat_value', col='abs_error_bin', sharey=True,
-                    col_wrap=col_wrap_num,
-                    palette='viridis', legend=False)
-    myPlot.set_xticklabels(rotation=45)
-    myPlot.set_titles("Error bin: {col_name}")
-    myPlot.set_axis_labels(x_var='Feature', y_var='Contribution')
-    plt.tight_layout(rect=[0,0,1,0.95])
-    plt.suptitle(f'Feature Contributions for {plot_title.replace("_", " ")}')
-    myPlot.fig.colorbar(sm, ax=myPlot.axes.ravel().tolist(), pad=0.04, aspect=30)
-    # TODO: add label for colorbar
-    plt.savefig(f'{out_loc}/{plot_title}_swarmplot.png')
+    # Create colorbar object
+    cmap = sns.light_palette("seagreen", as_cmap=True)
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
+    colors = {}
+    for cval in plot_data["feat_value"]:
+        colors.update({cval:cmap(norm(cval))})
+
+    # Create the figure
+    m = sns.swarmplot(x="feature", y="contrib", hue="feat_value", data=plot_data,
+                        palette=colors)
+    plt.xticks(rotation=45)
+    m.set_title(plot_title)
+    m.set_xlabel('Feature')
+    m.set_ylabel('Contribution')
+
+    # Get rid of legend to replace with colorbar
+    plt.gca().legend_.remove()
+
+    # Add colorbar
+    divider = make_axes_locatable(plt.gca())
+    ax_cb = divider.new_horizontal(size="5%", pad=0.05)
+    fig.add_axes(ax_cb)
+    cb = matplotlib.colorbar.ColorbarBase(ax_cb, cmap=cmap, norm=norm,
+                                            orientation='vertical')
+    cb.set_label('Normalized feature value')
+
+    # Make tight layout
+    plt.tight_layout()
+
+    # Save figure
+    savename = re.sub(r'[^\w\s]', '', plot_title)
+    savename = savename.replace(' ', '_')
+    savename = savename.lower()
+    print(f'\nSaving plot as {savename}.png')
+    plt.savefig(f'{out_loc}/{savename}.png')
 
 
-def main(plot_df_path, plot_title, out_loc):
+def main(plot_df_path, label_quartile, y_min, y_max, out_loc):
     """
     Reads in data and passes to make_plot.
     """
@@ -64,7 +86,10 @@ def main(plot_df_path, plot_title, out_loc):
     plot_df = pd.read_csv(plot_df_path, index_col=0)
 
     # Make plots
-    make_plot(plot_df, plot_title, out_loc)
+    for plot_quartile in plot_df.abs_error_bin.unique():
+        plot_title = (f'Fitness {label_quartile.replace("_", " ")}, error {plot_quartile.replace("_", " ")}')
+        plot_data = plot_df[plot_df['abs_error_bin'] == plot_quartile]
+        make_plot(plot_data, plot_title, y_min, y_max, out_loc)
 
 
 if __name__ == "__main__":
@@ -72,10 +97,12 @@ if __name__ == "__main__":
 
     parser.add_argument('plot_df', type=str, help='Path to formatted plot data '
                         'output from format_plot_data.py')
-    parser.add_argument('plot_title', type=str, help='Name of plot, words separated '
-			'by underscores')
+    parser.add_argument('y_min', type=float, help='Minimum contrib value for all quartiles')
+    parser.add_argument('y_max', type=float, help='Maximum contrib value for all quartiles')
+    parser.add_argument('label_quartile', type=str, help='Name of label quartile, '
+                        ' words separated by underscores')
     parser.add_argument('out_loc', type=str, help='Path to directory for output')
 
     args = parser.parse_args()
 
-    main(args.plot_df, args.plot_title, args.out_loc)
+    main(args.plot_df, args.label_quartile, args.y_min, args.y_max, args.out_loc)

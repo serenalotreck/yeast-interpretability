@@ -1,0 +1,11 @@
+old_interp,new_interp,old_feature_values,new_feature_values
+mpg,mpg,mpg,mpg
+bias,bias,NA1,NA1
+prediction,prediction,NA2,NA2
+cylinders,feature0,cylinders,feature0
+displacement,feature1,displacement,feature1
+horsepower,feature2,horsepower,feature2
+weight,feature3,weight,feature3
+acceleration,feature4,acceleration,feature4
+model_year,feature5,model_year,feature5
+origin,feature6,origin,feature6

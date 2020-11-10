@@ -24,7 +24,17 @@ def make_tidy_data(interp_df, out_loc, feature_values, y_name):
         y_name, str: Name of label column in feature_table
     """
     # Normalize the feature values between 0 and 1
+    neg_cols = feature_values.columns[(feature_values < 0).any()].tolist() # Get list of columns with negative values
+    mins = feature_values[neg_cols].min() # Get the minimum of those columns
+    feature_values[neg_cols] += abs(mins) # Add the abs val of the min to make all numbers positive before scaling
     features_scaled = feature_values.apply(lambda x: x/x.max())
+
+    # Assert that normalization worked
+    val_max = features_scaled.select_dtypes(include='number').max().max()
+    val_min = features_scaled.select_dtypes(include='number').min().min()
+    assert (features_scaled < 0).any().any() == False
+    assert (val_max == 1) & (val_min >= 0 ), f'Max is {val_max} and min is {val_min}'# Make sure this worked
+
     # Prep features_scaled and reshape:
     features_scaled = features_scaled.reset_index()
     features_scaled = features_scaled.rename({'index':'ID'})
@@ -33,7 +43,9 @@ def make_tidy_data(interp_df, out_loc, feature_values, y_name):
 
     print(f'features_scaled: \n\n{features_scaled.head()}')
 
-    # Make dataframes for each plot
+    # Make dataframes for each label quartile
+    y_min = 0
+    y_max = 0
     bins = interp_df[f'{y_name}_bin'].unique()
     for i, bin in enumerate(bins):
         bin_df = interp_df[interp_df[f'{y_name}_bin'] == bin].copy()
@@ -57,10 +69,26 @@ def make_tidy_data(interp_df, out_loc, feature_values, y_name):
         plot_df = plot_df.rename(columns={'variable':'feature', 'value_x':'contrib', 'value_y':'feat_value'})
         print(f'\n\nSnapshot of the final dataframe for {plot_title}:\n\n{plot_df.head()}')
 
+        # Update absolute min and max for contribs
+        if i == 0:
+            y_min = plot_df.contrib.min()
+            y_max = plot_df.contrib.max()
+        else:
+            if plot_df.contrib.min() < y_min:
+                y_min = plot_df.contrib.min()
+            if plot_df.contrib.max() > y_max:
+                y_max = plot_df.contrib.max()
+
         print(f'\nSaving {plot_title}.csv...')
         plot_df.to_csv(f'{out_loc}/{plot_title}_data.csv')
         print('Saved!')
 
+    # Save max and min
+    print(f'\nThe absolute minimum contribution is {y_min}, and the absolute maximum is {y_max}')
+    lim = pd.DataFrame({'y_min':[y_min], 'y_max':[y_max]})
+    print(f'\nSaving min and max as lim.csv...')
+    lim.to_csv(f'{out_loc}/lim.csv')
+    print('Saved!')
 
 
 def get_quartile_bins(interp_df, col_name):
@@ -179,7 +207,7 @@ def get_top_ten(imp, interp_df, feature_values):
     return interp_df, feature_values
 
 
-def main(interp_df, feature_values, imp, y_name, out_loc, plot_type):
+def main(interp_df, feature_values, imp, y_name, out_loc):
     """
     Generates swarmplots.
     error_bin_titles = [f'Error Bin {x}' for x in error_bins]
@@ -190,8 +218,6 @@ def main(interp_df, feature_values, imp, y_name, out_loc, plot_type):
         imp, df: gini importances from the ML pipeline
         y_name, str: Name of label column
         out_loc, str: path to save plots
-        plot_type, str: what kind of plots this data will be used for, options
-            are 'plain_swarm' and 'g_int'
     """
     # Get the ten features to use in plots
     print('\n\n==> Getting top ten most important features <==')
@@ -213,10 +239,7 @@ def main(interp_df, feature_values, imp, y_name, out_loc, plot_type):
         make_tidy_data(interp_df, out_loc,
                        feature_values, y_name)
         print('\nDone!')
-
-    elif plot_type == 'g_int':
-        pass ## TODO: add this
-
+        
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = 'Swarmplots of feature importances')
@@ -237,8 +260,6 @@ if __name__ == "__main__":
     'features used to train the model, same as ML_regression.py', default='')
     parser.add_argument('-out_loc', type=str, help='path to save the plots',
     default='')
-    parser.add_argument('-plot_type', type=str, help='Type of plots to be made '
-    'with the output data. Options are "plain_swarm" and "g_int"', default='plain_swarm')
 
     args = parser.parse_args()
 
@@ -262,4 +283,4 @@ if __name__ == "__main__":
             print(f'first five of features list: {features[:5]}')
             feature_values = feature_values[features]  # Chooses only the features used to train the model
 
-    main(interp_df, feature_values, imp, args.y_name, args.out_loc, args.plot_type)
+    main(interp_df, feature_values, imp, args.y_name, args.out_loc)
